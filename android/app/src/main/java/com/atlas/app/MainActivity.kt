@@ -20,10 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AtlasTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    TtsScreen(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
