@@ -1,7 +1,8 @@
 data class Novel(
     val title: String,
     val url: String,
-    val imageUrl: String
+    val imageUrl: String? = null,
+    val chapters: Int? = null
 )
 
 data class SearchResult(
