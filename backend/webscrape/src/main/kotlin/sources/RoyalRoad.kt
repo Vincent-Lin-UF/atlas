@@ -35,10 +35,17 @@ class RoyalRoad : NovelSource {
         val novelElements = doc.select(".fiction-list-item")
 
         val novels = novelElements.map { element ->
+            val chaptersText = element.selectFirst("div.row.stats > div:nth-of-type(5) span")?.text()
+
+            val chaptersCount = chaptersText
+                ?.filter { it.isDigit() }
+                ?.toIntOrNull()
+
             Novel(
                 title = element.selectFirst("h2.fiction-title a")?.text() ?: "Unknown",
                 url = element.selectFirst("h2.fiction-title a")?.attr("abs:href") ?: "",
-                imageUrl = element.selectFirst("img")?.attr("abs:src") ?: ""
+                imageUrl = element.selectFirst("img")?.attr("abs:src") ?: "",
+                chapters = chaptersCount
             )
         }
 

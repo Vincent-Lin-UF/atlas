@@ -35,10 +35,17 @@ class NovelFire : NovelSource {
         val novelElements = doc.select("li.novel-item")
 
         val novels = novelElements.map { element ->
+            val chaptersText = element.selectFirst("div.novel-stats > span")?.text()
+
+            val chaptersCount = chaptersText
+                ?.filter { it.isDigit() }
+                ?.toIntOrNull()
+
             Novel(
                 title = element.selectFirst("h4.novel-title")?.text() ?: "Unknown",
                 url = element.selectFirst("a")?.attr("abs:href") ?: "",
-                imageUrl = element.selectFirst("img")?.attr("abs:src") ?: ""
+                imageUrl = element.selectFirst("img")?.attr("abs:src") ?: "",
+                chapters = chaptersCount
             )
         }
 

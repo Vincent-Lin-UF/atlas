@@ -43,7 +43,7 @@ fun main() = runBlocking {
 
             result.novels.forEach { novel ->
                 allNovels.add(novel)
-                println("${allNovels.size}. ${novel.title}")
+                println("${allNovels.size}. ${novel.title} (${novel.chapters})")
             }
 
             val prompt = if (selectedSource.hasNextPage) {
