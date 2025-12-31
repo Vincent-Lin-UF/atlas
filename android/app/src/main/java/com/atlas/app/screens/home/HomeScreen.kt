@@ -105,6 +105,7 @@ fun SearchAppBar(
                 .focusRequester(focusRequester),
             value = query,
             onValueChange = onQueryChange,
+            textStyle = MaterialTheme.typography.bodyLarge,
             placeholder = {
                 Text(
                     "Search...",
