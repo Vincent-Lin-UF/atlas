@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -355,40 +356,66 @@ fun ExpandableDescription(text: String?) {
     var isExpanded by remember { mutableStateOf(false) }
     var isOverflowing by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
+
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val fadeBrush = remember(isExpanded) {
+        Brush.verticalGradient(
+            colors = listOf(surfaceColor.copy(alpha = 0f), surfaceColor),
+            startY = 0f
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isOverflowing) {
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = { isExpanded = !isExpanded }
-                    )
-                } else Modifier
-            )
             .padding(16.dp)
             .animateContentSize()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = { if (isOverflowing) isExpanded = !isExpanded }
+            )
     ) {
-        Text(
-            text = text ?: "",
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = if (isExpanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface,
-            onTextLayout = { textLayoutResult ->
-                if (!isExpanded && textLayoutResult.hasVisualOverflow) {
-                    isOverflowing = true
+        Box(contentAlignment = Alignment.BottomCenter) {
+            Text(
+                text = text ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = if (isExpanded) Int.MAX_VALUE else 3,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+                onTextLayout = { textLayoutResult ->
+                    if (textLayoutResult.hasVisualOverflow) {
+                        isOverflowing = true
+                    }
+                }
+            )
+
+            if (isOverflowing && !isExpanded) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(30.dp)
+                        .background(fadeBrush),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Read More",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
-        )
+        }
 
-        if (isOverflowing) {
+        if (isExpanded && isOverflowing) {
             Icon(
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = "Collapse",
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 4.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
     }

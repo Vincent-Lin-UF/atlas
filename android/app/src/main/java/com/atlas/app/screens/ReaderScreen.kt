@@ -44,7 +44,7 @@ fun ReaderScreen(
 ) {
     // --- TEXT SETTINGS ---
     val fontSize = 14.sp
-    val lineHeight = 24.sp
+    val lineHeight = 20.sp
     val paragraphPadding = 8.dp
     // ---------------------
 
