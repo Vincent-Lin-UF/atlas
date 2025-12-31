@@ -213,7 +213,6 @@ fun ChaptersScreen(
                     ChapterGroupHeader(
                         start = startChapter,
                         end = endChapter,
-                        count = chunk.size,
                         isExpanded = !isCollapsed,
                         onToggle = {
                             if (isCollapsed) {
@@ -251,7 +250,6 @@ fun ChaptersScreen(
 fun ChapterGroupHeader(
     start: Int,
     end: Int,
-    count: Int,
     isExpanded: Boolean,
     onToggle: () -> Unit
 ) {
@@ -276,11 +274,6 @@ fun ChapterGroupHeader(
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "$count",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
