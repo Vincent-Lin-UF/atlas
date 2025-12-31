@@ -176,7 +176,7 @@ fun LibraryItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = novel.title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = if (subtitle != null) 1 else 2,
                 overflow = TextOverflow.Ellipsis
             )

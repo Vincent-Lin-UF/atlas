@@ -1,10 +1,12 @@
 package com.atlas.app.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,7 +15,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,7 +29,7 @@ import com.atlas.app.ChapterData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ReaderScreen(
     novelTitle: String,
@@ -42,12 +43,13 @@ fun ReaderScreen(
     onSaveProgress: (Int, Int) -> Unit
 ) {
     // --- TEXT SETTINGS ---
-    val fontSize = 16.sp
+    val fontSize = 14.sp
     val lineHeight = 24.sp
     val paragraphPadding = 8.dp
     // ---------------------
 
     var isTopBarVisible by remember { mutableStateOf(false) }
+    var isPillBarVisible by remember { mutableStateOf(true) }
 
     val listState = rememberLazyListState()
     var initialScrollDone by remember { mutableStateOf(false) }
@@ -133,12 +135,12 @@ fun ReaderScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                 )
                 BottomAppBar(
-                    modifier = Modifier.height(96.dp),
+                    modifier = Modifier.height(52.dp),
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -149,7 +151,7 @@ fun ReaderScreen(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(20.dp))
 
                         if (currentVisibleChapter != null) {
                             Text(text = "${currentVisibleChapter!!.id} / $totalChapters", fontSize = 14.sp)
@@ -161,10 +163,16 @@ fun ReaderScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
+                .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { isTopBarVisible = !isTopBarVisible }
+                    indication = null,
+                    onClick = {
+                        isPillBarVisible = !isPillBarVisible
+                    },
+                    onLongClick = {
+                        isTopBarVisible = !isTopBarVisible
+                    }
+                )
         ) {
 
             Surface(
@@ -268,41 +276,50 @@ fun ReaderScreen(
                 )
             }
 
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-                tonalElevation = 8.dp,
-                shadowElevation = 8.dp,
+            AnimatedVisibility(
+                visible = isPillBarVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = innerPadding.calculateBottomPadding() + 20.dp)
-                    .height(52.dp)
                     .zIndex(2f)
             ) {
-                androidx.compose.animation.Crossfade(
-                    targetState = isTopBarVisible,
-                    label = "ControlsCrossfade"
-                ) { showMenuTools ->
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.height(52.dp)
+                ) {
+                    // Swaps content based on Top Bar (Settings mode vs Audio mode)
+                    Crossfade(
+                        targetState = isTopBarVisible,
+                        label = "ControlsCrossfade"
+                    ) { showMenuTools ->
 
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (!showMenuTools) {
-                            IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Last Chapter") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Last Paragraph") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.Stop, contentDescription = "Stop") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.SkipNext, contentDescription = "Next Paragraph") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Next Chapter") }
-                        } else {
-                            IconButton(onClick = { }) { Icon(Icons.Default.FormatPaint, contentDescription = "Theme") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "Search") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.FindReplace, contentDescription = "Replacement") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.Timer, contentDescription = "Speech Timer") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.Translate, contentDescription = "Translate") }
-                            IconButton(onClick = { }) { Icon(Icons.Default.Audiotrack, contentDescription = "Speech Settings") }
+                        Row(
+                            modifier = Modifier.padding(horizontal = 0.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        ) {
+                            if (!showMenuTools) {
+                                // Audio Controls
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Last Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Last Paragraph") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Stop, contentDescription = "Stop") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.SkipNext, contentDescription = "Next Paragraph") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Next Chapter") }
+                            } else {
+                                // Settings Controls
+                                IconButton(onClick = { }) { Icon(Icons.Default.FormatPaint, contentDescription = "Theme") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "Search") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FindReplace, contentDescription = "Replacement") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Timer, contentDescription = "Speech Timer") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Translate, contentDescription = "Translate") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Audiotrack, contentDescription = "Speech Settings") }
+                            }
                         }
                     }
                 }

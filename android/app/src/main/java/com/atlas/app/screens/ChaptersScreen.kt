@@ -3,6 +3,7 @@ package com.atlas.app.screens
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,7 +31,7 @@ fun ChaptersScreen(
     onChapterClick: (Int) -> Unit,
     onCategoryChange: (String) -> Unit
 ) {
-    val categories = listOf("Reading", "On Hold", "Completed", "None")
+    val categories = listOf("Reading", "On Hold", "Finished", "None")
     var sortDescending by remember { mutableStateOf(false) }
     var showLibraryMenu by remember { mutableStateOf(false) }
 
@@ -327,7 +328,7 @@ fun NovelHeaderSection(
         Column {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
                 maxLines = 3,
@@ -359,10 +360,19 @@ fun NovelHeaderSection(
 fun ExpandableDescription(text: String?) {
     var isExpanded by remember { mutableStateOf(false) }
     var isOverflowing by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isOverflowing) Modifier.clickable { isExpanded = !isExpanded } else Modifier)
+            .then(
+                if (isOverflowing) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = { isExpanded = !isExpanded }
+                    )
+                } else Modifier
+            )
             .padding(16.dp)
             .animateContentSize()
     ) {
@@ -399,7 +409,7 @@ fun ChapterListItem(name: String, chapterNum: Int, onClick: () -> Unit) {
                 text = name,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyMedium
             )
         },
         trailingContent = {
