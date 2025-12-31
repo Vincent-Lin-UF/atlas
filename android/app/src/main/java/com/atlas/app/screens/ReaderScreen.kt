@@ -293,16 +293,15 @@ fun ReaderScreen(
                     modifier = Modifier.height(52.dp)
                 ) {
                     // Swaps content based on Top Bar (Settings mode vs Audio mode)
-                    // But visibility is now controlled by single click (isPillBarVisible)
                     Crossfade(
                         targetState = isTopBarVisible,
                         label = "ControlsCrossfade"
                     ) { showMenuTools ->
 
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp),
+                            modifier = Modifier.padding(horizontal = 0.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             if (!showMenuTools) {
                                 // Audio Controls
