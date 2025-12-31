@@ -173,15 +173,16 @@ fun ChaptersScreen(
 
                     Row {
                         // Collapse/Expand All Button
+                        val allCollapsed = collapsedGroups.size == chunks.size
                         IconButton(onClick = {
-                            if (collapsedGroups.isEmpty()) {
-                                chunks.indices.forEach { collapsedGroups[it] = true }
-                            } else {
+                            if (allCollapsed) {
                                 collapsedGroups.clear()
+                            } else {
+                                chunks.indices.forEach { collapsedGroups[it] = true } // Collapse everything
                             }
                         }) {
                             Icon(
-                                imageVector = if (collapsedGroups.isEmpty()) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
+                                imageVector = if (allCollapsed) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
                                 contentDescription = "Toggle All Groups",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
