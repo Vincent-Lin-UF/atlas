@@ -305,20 +305,20 @@ fun ReaderScreen(
                         ) {
                             if (!showMenuTools) {
                                 // Audio Controls
-                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Last Chapter") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Last Paragraph") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Speak Last Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Speak Last Paragraph") }
                                 IconButton(onClick = { }) { Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause") }
                                 IconButton(onClick = { }) { Icon(Icons.Default.Stop, contentDescription = "Stop") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.SkipNext, contentDescription = "Next Paragraph") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Next Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.SkipNext, contentDescription = "Speak Next Paragraph") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Speak Next Chapter") }
                             } else {
                                 // Settings Controls
-                                IconButton(onClick = { }) { Icon(Icons.Default.FormatPaint, contentDescription = "Theme") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "Search") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.FindReplace, contentDescription = "Replacement") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Last Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FormatPaint, contentDescription = "Change Theme") }
                                 IconButton(onClick = { }) { Icon(Icons.Default.Timer, contentDescription = "Speech Timer") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.Translate, contentDescription = "Translate") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.Audiotrack, contentDescription = "Speech Settings") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FindReplace, contentDescription = "Replacement") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "Search") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Next Chapter") }
                             }
                         }
                     }
