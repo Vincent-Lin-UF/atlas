@@ -52,11 +52,8 @@ object LibraryManager {
         }
     }
 
-    // Save novel to library
     suspend fun getNovelDetails(novel: Novel): Novel = withContext(Dispatchers.IO) {
-        val source = allSources.find {
-            novel.url.contains(it.baseUrl.removePrefix("https://").removePrefix("www."))
-        }
+        val source = findSource(novel.source)
 
         val chapters = try {
             source?.getChapters(novel) ?: emptyList()
@@ -77,7 +74,7 @@ object LibraryManager {
         chapters: List<com.atlas.app.Chapter>? = null,
         category: String? = null,
     ): String = withContext(Dispatchers.IO) {
-        val novelId = novel.url.hashCode().toString()
+        val novelId = (novel.title + novel.source).hashCode().toString()
         val finalChapters = chapters ?: fetchChapters(novel)
 
         val novelFolder = File(context.filesDir, "novels/$novelId").apply { if (!exists()) mkdirs() }
@@ -118,6 +115,7 @@ object LibraryManager {
         return findSource(novel.source)?.getChapters(novel) ?: emptyList()
     }
 
+    // Save novel to library
     suspend fun addNovelToLibrary(
         context: Context,
         novel: Novel,

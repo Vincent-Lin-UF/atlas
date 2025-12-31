@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onRefreshLibrary = { refreshLibrary() },
                             onBrowseNovelSelect = { novelFromSearch ->
-                                val generatedId = novelFromSearch.url.hashCode().toString()
+                                val generatedId = (novelFromSearch.title + novelFromSearch.source).hashCode().toString()
                                 val existing = allNovels.find { it.id == generatedId }
 
                                 if (existing != null) {
