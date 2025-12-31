@@ -3,7 +3,7 @@ package com.atlas.app
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Parcelable
-import kotlinx.android.parcel.Parcelize
+import kotlinx.parcelize.Parcelize
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.File

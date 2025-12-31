@@ -1,6 +1,5 @@
 package com.atlas.app.screens.home
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -28,10 +26,8 @@ import com.atlas.app.Novel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
-    onNovelAdded: () -> Unit,
     onNovelSelect: (Novel) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val listState = rememberLazyListState()
 
@@ -101,7 +97,6 @@ fun BrowseScreen(
             listState = listState,
             query = activeQuery,
             selectedSourceIndex = selectedSourceIndex,
-            onNovelAdded = onNovelAdded,
             onNovelSelect = onNovelSelect
         )
     }
@@ -113,17 +108,12 @@ private fun BrowseContent(
     listState: LazyListState,
     query: String,
     selectedSourceIndex: Int,
-    onNovelAdded: () -> Unit,
     onNovelSelect: (Novel) -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
     var results by remember { mutableStateOf(emptyList<Novel>()) }
     var isLoading by remember { mutableStateOf(false) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var canLoadMore by remember { mutableStateOf(true) }
-    var currentlyAddingUrl by remember { mutableStateOf<String?>(null) }
 
     // Run search whenever query or source changes
     LaunchedEffect(query, selectedSourceIndex) {
@@ -187,8 +177,6 @@ private fun BrowseContent(
         contentPadding = PaddingValues(bottom = 80.dp, top = 12.dp)
     ) {
         items(results) { novel ->
-            val isAdding = currentlyAddingUrl == novel.url
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -224,7 +212,7 @@ private fun BrowseContent(
                     )
 
                     Text(
-                        text = novel.chapterCount?.let { "$it Chapters" } ?: "Unknown Chapters",
+                        text = novel.chapterCount.let { "$it Chapters" },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.secondary
                     )

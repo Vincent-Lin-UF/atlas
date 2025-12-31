@@ -18,7 +18,6 @@ import com.atlas.app.screens.home.HomeScreen
 import com.atlas.app.screens.home.LibraryManager
 import com.atlas.app.ui.theme.AtlasTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -242,6 +241,8 @@ class MainActivity : ComponentActivity() {
 
                         val scope = rememberCoroutineScope()
 
+                        val chapterInfoCache = remember { mutableMapOf<Int, Pair<String, String>>() }
+
                         val loadedChapters = remember(startChapterIndex) { mutableStateListOf<ChapterData>() }
                         val fetchingIds = remember { mutableStateListOf<Int>() }
 
@@ -250,21 +251,28 @@ class MainActivity : ComponentActivity() {
                             val contentFile = File(novelDir, "$index.txt")
                             val chaptersFile = File(novelDir, "chapters.json")
 
-                            if (contentFile.exists()) {
-                                val body = contentFile.readText().replace(Regex("(?<!\n)\n(?!\n)"), "\n\n")
-                                var title = "Chapter $index"
-                                if (chaptersFile.exists()) {
+                            fun ensureCacheLoaded() {
+                                if (chapterInfoCache.isEmpty() && chaptersFile.exists()) {
                                     try {
                                         val json = org.json.JSONArray(chaptersFile.readText())
                                         for (i in 0 until json.length()) {
                                             val obj = json.getJSONObject(i)
-                                            if (obj.getInt("index") == index) {
-                                                title = obj.getString("name")
-                                                break
-                                            }
+                                            val idx = obj.getInt("index")
+                                            val url = obj.getString("url")
+                                            val name = obj.getString("name")
+                                            chapterInfoCache[idx] = url to name
                                         }
-                                    } catch (_: Exception) {}
+                                    } catch (e: Exception) { e.printStackTrace() }
                                 }
+                            }
+
+                            if (contentFile.exists()) {
+                                val body = contentFile.readText().replace(Regex("(?<!\n)\n(?!\n)"), "\n\n")
+
+                                var title = "Chapter $index"
+                                ensureCacheLoaded()
+                                title = chapterInfoCache[index]?.second ?: title
+
                                 return@withContext ChapterData(index, title, body)
                             }
 
@@ -273,35 +281,18 @@ class MainActivity : ComponentActivity() {
                                     LibraryManager.saveNovelToDisk(this@MainActivity, novel)
                                 }
 
-                                if (chaptersFile.exists()) {
-                                    try {
-                                        val json = org.json.JSONArray(chaptersFile.readText())
-                                        var targetUrl = ""
-                                        var targetName = "Chapter $index"
+                                ensureCacheLoaded()
 
-                                        for (i in 0 until json.length()) {
-                                            val obj = json.getJSONObject(i)
-                                            if (obj.getInt("index") == index) {
-                                                targetUrl = obj.getString("url")
-                                                targetName = obj.getString("name")
-                                                break
-                                            }
-                                        }
+                                val (targetUrl, targetName) = chapterInfoCache[index] ?: ("" to "Chapter $index")
 
-                                        if (targetUrl.isNotEmpty()) {
-                                            delay(1000)
-                                            val content = LibraryManager.downloadChapterContent(novel, targetUrl)
-                                            contentFile.writeText(content)
-                                            return@withContext ChapterData(index, targetName, content)
-                                        }
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
+                                if (targetUrl.isNotEmpty()) {
+                                    val content = LibraryManager.downloadChapterContent(novel, targetUrl)
+                                    contentFile.writeText(content)
+                                    return@withContext ChapterData(index, targetName, content)
                                 }
                             }
                             return@withContext ChapterData(index, "Error", "Could not download chapter. Check connection.")
                         }
-
                         fun prefetchChapter(index: Int) {
                             if (index <= totalChapters) {
                                 scope.launch(Dispatchers.IO) {

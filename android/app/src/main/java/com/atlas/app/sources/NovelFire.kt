@@ -75,18 +75,6 @@ class NovelFire : NovelSource {
             return SearchResult(novels, if (hasNextPage) currentPage.toString() else null)
         }
 
-        private fun cleanTitle(raw: String): String {
-            val unicodeRegex = Regex("""\\u([0-9a-fA-F]{4})""")
-            var title = unicodeRegex.replace(raw) {
-                it.groupValues[1].toInt(16).toChar().toString()
-            }
-            title = title.replace("\\/", "/")
-                .replace("\\\"", "\"")
-                .replace(Regex("""[\u007F-\u009F\u00AD\u200B-\u200F\uFEFF]"""), "")
-                .replace("\u00c2", "")
-            return title.replace(Regex("""\s+"""), " ").trim()
-        }
-
         override suspend fun getChapters(novel: Novel): List<Chapter> {
             return try {
                 val initialResponse = Jsoup.connect(novel.url)
@@ -172,7 +160,7 @@ class NovelFire : NovelSource {
             if (badSelectors.isNotEmpty()) {
                 try {
                     contentElement.select(badSelectors.joinToString(", ")).remove()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                 }
             }
             contentElement.select("[style~=display:\\s*none], [style~=(width|height):\\s*[01](px)?]").remove()

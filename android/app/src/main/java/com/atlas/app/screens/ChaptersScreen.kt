@@ -338,7 +338,7 @@ fun NovelHeaderSection(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "$source",
+                text = source,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
             )

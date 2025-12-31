@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import androidx.core.content.edit
 
 object LibraryManager {
     // Sources
@@ -33,7 +34,7 @@ object LibraryManager {
             activeSources.flatMap { source ->
                 try {
                     source.search(query).novels.map { it.copy(source = source.name) }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emptyList()
                 }
             }
@@ -126,12 +127,12 @@ object LibraryManager {
         val savedIds = sharedPref.getStringSet("library_ids", mutableSetOf()) ?: mutableSetOf()
         val newIds = savedIds.toMutableSet().apply { add(novelId) }
 
-        sharedPref.edit().apply {
+        sharedPref.edit {
             putStringSet("library_ids", newIds)
             if (!sharedPref.contains("category_$novelId")) {
                 putString("category_$novelId", "Reading")
             }
-        }.apply()
+        }
     }
     suspend fun downloadChapterContent(novel: Novel, chapterUrl: String): String {
         return findSource(novel.source)?.getChapterContent(chapterUrl)?.body ?: "Error"

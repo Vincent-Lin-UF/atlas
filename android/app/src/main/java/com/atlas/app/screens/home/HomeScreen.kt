@@ -75,7 +75,6 @@ fun HomeScreen(
                     bottomPadding = bottomPadding
                 )
                 2 -> BrowseScreen(
-                    onNovelAdded = onRefreshLibrary,
                     onNovelSelect = onBrowseNovelSelect,
                 )
             }
@@ -200,12 +199,5 @@ fun LibraryItem(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun CenterText(text: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text)
     }
 }
