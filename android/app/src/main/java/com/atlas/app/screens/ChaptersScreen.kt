@@ -148,6 +148,7 @@ fun ChaptersScreen(
                 NovelHeaderSection(
                     title = novel.title,
                     author = novel.author,
+                    source = novel.source,
                     category = novel.category,
                     coverAsset = novel.coverAsset
                 )
@@ -289,7 +290,7 @@ fun ChapterGroupHeader(
 
 @Composable
 fun NovelHeaderSection(
-    title: String, author: String?, category: String, coverAsset: String?
+    title: String, author: String?, source: String, category: String, coverAsset: String?
 ) {
     Row(
         modifier = Modifier
@@ -335,18 +336,12 @@ fun NovelHeaderSection(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Text(
-                    text = if (category == "None") "Not in Library" else category,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "$source",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+            )
         }
     }
 }

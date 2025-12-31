@@ -19,7 +19,7 @@ object LibraryManager {
         RoyalRoad(),
     )
     private var activeSources: List<NovelSource> = emptyList()
-    fun getSourceNames(): List<String> = listOf("All Sources") + allSources.map { it.name }
+    fun getSourceNames(): List<String> = listOf("All") + allSources.map { it.name }
 
     // Search functionality
     suspend fun search(query: String, sourceIndex: Int): List<Novel> =
@@ -32,9 +32,8 @@ object LibraryManager {
 
             activeSources.flatMap { source ->
                 try {
-                    source.search(query).novels
+                    source.search(query).novels.map { it.copy(source = source.name) }
                 } catch (e: Exception) {
-                    e.printStackTrace()
                     emptyList()
                 }
             }
@@ -88,6 +87,7 @@ object LibraryManager {
             put("id", novelId)
             put("title", novel.title)
             put("author", novel.author ?: "Unknown Author")
+            put("source", novel.source)
             put("description", novel.description ?: "No description available.")
             if (category != null) put("category", category)
             put("coverAsset", novel.coverAsset)
@@ -110,11 +110,12 @@ object LibraryManager {
         return@withContext novelId
     }
 
-    suspend fun fetchChapters(novel: Novel): List<com.atlas.app.Chapter> = withContext(Dispatchers.IO) {
-        val source = allSources.find {
-            novel.url.contains(it.baseUrl.removePrefix("https://").removePrefix("www."))
-        }
-        return@withContext source?.getChapters(novel) ?: emptyList()
+    private fun findSource(sourceName: String?): NovelSource? {
+        return allSources.find { it.name == sourceName }
+    }
+
+    suspend fun fetchChapters(novel: Novel): List<com.atlas.app.Chapter> {
+        return findSource(novel.source)?.getChapters(novel) ?: emptyList()
     }
 
     suspend fun addNovelToLibrary(
@@ -134,12 +135,8 @@ object LibraryManager {
             }
         }.apply()
     }
-
-    suspend fun downloadChapterContent(novel: Novel, chapterUrl: String): String = withContext(Dispatchers.IO) {
-        val source = allSources.find {
-            novel.url.contains(it.baseUrl.removePrefix("https://").removePrefix("www."))
-        }
-        return@withContext source?.getChapterContent(chapterUrl)?.body ?: "Error downloading content."
+    suspend fun downloadChapterContent(novel: Novel, chapterUrl: String): String {
+        return findSource(novel.source)?.getChapterContent(chapterUrl)?.body ?: "Error"
     }
 }
 

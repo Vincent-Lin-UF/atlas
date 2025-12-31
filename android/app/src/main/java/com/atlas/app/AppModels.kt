@@ -10,12 +10,13 @@ import java.io.File
 
 @Parcelize
 data class Novel (
-    val id: String, // URL hash or unique ID
+    val id: String,
     val title: String,
-    val url: String, // The source URL (previously sourceUrl in AppModels)
+    val url: String,
     var author: String? = null,
+    val source: String,
     var description: String? = null,
-    val coverAsset: String? = null, // Path for local or URL for remote
+    val coverAsset: String? = null,
     val category: String = "None",
     val chapterCount: Int = 0,
     val lastReadChapter: Int = 1,
@@ -51,28 +52,24 @@ fun loadNovelsFromStorage(context: Context, prefs: SharedPreferences): List<Nove
     for (folder in novelFolders) {
         try {
             val infoFile = File(folder, "info.json")
-            val chaptersFile = File(folder, "chapters.json") // Reference separate file
+            val chaptersFile = File(folder, "chapters.json")
 
             if (!infoFile.exists()) continue
 
             val infoJson = JSONObject(infoFile.readText())
             val id = folder.name
 
-            // 1. Resolve Cover Path: Prioritize the path saved in JSON
             val coverPath = infoJson.optString("coverAsset", "").takeIf { it.isNotEmpty() }
                 ?: File(folder, "cover.jpg").takeIf { it.exists() }?.absolutePath
 
-            // 2. Load Chapter Titles from separate chapters.json
             val titlesList = mutableListOf<String>()
             if (chaptersFile.exists()) {
                 val chapArray = JSONArray(chaptersFile.readText())
                 for (i in 0 until chapArray.length()) {
-                    // Extract names from the objects in chapters.json
                     titlesList.add(chapArray.getJSONObject(i).getString("name"))
                 }
             }
 
-            // 3. Sync Preferences (Progress & Category)
             val lastChapter = prefs.getInt("last_chapter_$id", 0)
             val lastPos = prefs.getInt("last_pos_$id", 0)
             val lastTime = prefs.getLong("last_time_$id", 0L)
@@ -84,9 +81,9 @@ fun loadNovelsFromStorage(context: Context, prefs: SharedPreferences): List<Nove
                 id = id,
                 title = infoJson.optString("title", "Unknown Title"),
                 author = infoJson.optString("author", "Unknown Author"),
+                source = infoJson.optString("source", "Unknown Source"),
                 description = infoJson.optString("description", "No description available."),
                 category = savedCategory,
-                // Ensure count is based on actual chapters list if JSON is missing it
                 chapterCount = infoJson.optInt("totalChapters", titlesList.size),
                 coverAsset = coverPath,
                 url = infoJson.optString("sourceUrl", ""),
@@ -98,10 +95,9 @@ fun loadNovelsFromStorage(context: Context, prefs: SharedPreferences): List<Nove
             novels.add(novel)
 
         } catch (e: Exception) {
-            e.printStackTrace() // Useful for debugging malformed JSON
+            e.printStackTrace()
             continue
         }
     }
-    // Return sorted by last read time for the History screen
     return novels.sortedByDescending { it.lastReadTime }
 }

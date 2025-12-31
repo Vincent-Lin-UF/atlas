@@ -64,6 +64,7 @@ class NovelFire : NovelSource {
                 Novel(
                     id = "",
                     title = titleElement?.text()?.trim() ?: "Unknown",
+                    source = "NovelFire",
                     url = linkElement?.attr("abs:href") ?: "",
                     coverAsset = actualImageUrl,
                     chapterCount = chaptersText?.filter { it.isDigit() }?.toIntOrNull() ?: 0

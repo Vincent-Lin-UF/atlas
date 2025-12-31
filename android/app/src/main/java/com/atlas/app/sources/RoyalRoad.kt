@@ -44,6 +44,7 @@ class RoyalRoad : NovelSource {
             Novel(
                 id = "",
                 title = element.selectFirst("h2.fiction-title a")?.text() ?: "Unknown",
+                source = "RoyalRoad",
                 url = element.selectFirst("h2.fiction-title a")?.attr("abs:href") ?: "",
                 coverAsset = element.selectFirst("img")?.attr("abs:src") ?: "",
                 chapterCount = chapterCount ?: 0

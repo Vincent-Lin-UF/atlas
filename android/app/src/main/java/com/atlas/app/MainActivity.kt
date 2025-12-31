@@ -151,7 +151,8 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     val previewNovel = novelFromSearch.copy(
                                         id = generatedId,
-                                        category = "None"
+                                        category = "None",
+                                        source = novelFromSearch.source
                                     )
                                     allNovels = allNovels + previewNovel
                                     navController.navigate("details/$generatedId")
