@@ -75,7 +75,8 @@ object LibraryManager {
     suspend fun saveNovelToDisk(
         context: Context,
         novel: Novel,
-        chapters: List<com.atlas.app.Chapter>? = null
+        chapters: List<com.atlas.app.Chapter>? = null,
+        category: String? = null,
     ): String = withContext(Dispatchers.IO) {
         val novelId = novel.url.hashCode().toString()
         val finalChapters = chapters ?: fetchChapters(novel)
@@ -88,7 +89,7 @@ object LibraryManager {
             put("title", novel.title)
             put("author", novel.author ?: "Unknown Author")
             put("description", novel.description ?: "No description available.")
-            put("category", "Reading")
+            if (category != null) put("category", category)
             put("coverAsset", novel.coverAsset)
             put("totalChapters", finalChapters.size)
             put("sourceUrl", novel.url)
@@ -121,7 +122,7 @@ object LibraryManager {
         novel: Novel,
         sharedPref: SharedPreferences
     ) = withContext(Dispatchers.IO) {
-        val novelId = saveNovelToDisk(context, novel, null)
+        val novelId = saveNovelToDisk(context, novel, null, category = "Reading")
 
         val savedIds = sharedPref.getStringSet("library_ids", mutableSetOf()) ?: mutableSetOf()
         val newIds = savedIds.toMutableSet().apply { add(novelId) }

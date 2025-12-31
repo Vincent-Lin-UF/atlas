@@ -44,7 +44,7 @@ fun LibraryScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
-    val categories = listOf("All", "Reading", "On Hold", "Completed")
+    val categories = listOf("All", "Reading", "On Hold", "Finished")
     val pagerState = rememberPagerState(pageCount = { categories.size })
     val scope = rememberCoroutineScope()
 
@@ -98,7 +98,7 @@ fun LibraryScreen(
                     0 -> allNovels.filter { it.category != "None" }
                     1 -> allNovels.filter { it.category == "Reading" }
                     2 -> allNovels.filter { it.category == "On Hold" }
-                    3 -> allNovels.filter { it.category == "Completed" }
+                    3 -> allNovels.filter { it.category == "Finished" }
                     else -> emptyList()
                 }
             }
