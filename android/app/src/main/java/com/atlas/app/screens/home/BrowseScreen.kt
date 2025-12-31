@@ -184,7 +184,7 @@ private fun BrowseContent(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(bottom = 80.dp, top = 12.dp)
     ) {
         items(results) { novel ->
             val isAdding = currentlyAddingUrl == novel.url
