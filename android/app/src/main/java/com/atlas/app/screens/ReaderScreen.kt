@@ -154,7 +154,7 @@ fun ReaderScreen(
                         Spacer(modifier = Modifier.width(20.dp))
 
                         if (currentVisibleChapter != null) {
-                            Text(text = "${currentVisibleChapter!!.id} / $totalChapters", fontSize = 14.sp)
+                            Text(text = "${currentVisibleChapter!!.id}/$totalChapters", fontSize = 10.sp)
                         }
                     }
                 }
