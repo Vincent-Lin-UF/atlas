@@ -14,6 +14,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.atlas.app.components.LibraryItem
@@ -246,12 +247,15 @@ private fun BrowseTabContent(
         if (state.novels.isEmpty() && !state.isLoading) {
             item {
                 Box(
-                    modifier = Modifier
+                    Modifier
                         .fillMaxWidth()
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No results found", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "No results found",
+                        color = Color.Gray
+                    )
                 }
             }
         }
