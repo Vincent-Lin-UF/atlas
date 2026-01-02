@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.atlas.app.Novel
+import com.atlas.app.data.Novel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,7 +115,6 @@ private fun BrowseContent(
     var isLoadingMore by remember { mutableStateOf(false) }
     var canLoadMore by remember { mutableStateOf(true) }
 
-    // Run search whenever query or source changes
     LaunchedEffect(query, selectedSourceIndex) {
         if (query.isBlank()) {
             results = emptyList()
@@ -180,11 +179,10 @@ private fun BrowseContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNovelSelect(novel) } // Trigger View logic
+                    .clickable { onNovelSelect(novel) }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Thumbnail Box
                 Box(
                     modifier = Modifier
                         .height(70.dp)
@@ -202,7 +200,6 @@ private fun BrowseContent(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Text Content
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = novel.title,

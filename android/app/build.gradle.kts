@@ -1,4 +1,5 @@
 plugins {
+    id("com.google.devtools.ksp")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
@@ -67,4 +68,8 @@ dependencies {
     implementation(kotlin("reflect"))
     implementation("org.jsoup:jsoup:1.21.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    val room_version = "2.8.4"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
 }

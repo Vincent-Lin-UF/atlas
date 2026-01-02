@@ -1,5 +1,7 @@
 package com.atlas.app
 
+import android.annotation.SuppressLint
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,25 +10,37 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.edit
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.atlas.app.data.AppDatabase
+import com.atlas.app.data.ChapterData
+import com.atlas.app.data.Novel
 import com.atlas.app.screens.ChaptersScreen
 import com.atlas.app.screens.ReaderScreen
 import com.atlas.app.screens.home.HomeScreen
 import com.atlas.app.screens.home.LibraryManager
 import com.atlas.app.ui.theme.AtlasTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 class MainActivity : ComponentActivity() {
 
+    @SuppressLint("SourceLockedOrientationActivity")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Force portrait mode
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+        // Initialize db
+        val db = AppDatabase.getDatabase(applicationContext)
+        val novelDao = db.novelDao()
+        val chapterDao = db.chapterDao()
+
+        // Initialize preferences
         val sharedPref = getSharedPreferences("atlas_prefs", MODE_PRIVATE)
         val lastScreenType = sharedPref.getString("last_screen_type", "home")
         val lastActiveNovelId = sharedPref.getString("last_active_novel_id", "")
@@ -34,39 +48,50 @@ class MainActivity : ComponentActivity() {
         setContent {
             AtlasTheme {
                 val navController = rememberNavController()
+                val scope = rememberCoroutineScope()
 
-                var allNovels by remember {
-                    mutableStateOf(loadNovelsFromStorage(this, sharedPref))
-                }
+                // Get library and automatically update when DB changes
+                val libraryNovels by novelDao.getLibraryNovels()
+                    .collectAsState(initial = emptyList())
 
-                var currentHomeTab by rememberSaveable {
-                    mutableIntStateOf(0)
-                }
+                var currentHomeTab by rememberSaveable { mutableIntStateOf(0) }
 
+                // Restore last session & clear unused preview novels
                 LaunchedEffect(Unit) {
-                    if (!lastActiveNovelId.isNullOrEmpty() && lastScreenType == "reader") {
-                        navController.navigate("details/$lastActiveNovelId") {
-                            launchSingleTop = true
+                    if (lastScreenType == "reader" && !lastActiveNovelId.isNullOrEmpty()) {
+                        // Retrieve last novel info
+                        val lastNovel = withContext(Dispatchers.IO) {
+                            novelDao.getNovel(lastActiveNovelId)
                         }
-                        val lastChapter =
-                            sharedPref.getInt("last_chapter_$lastActiveNovelId", 1)
-                        navController.navigate(
-                            "reader/$lastActiveNovelId/$lastChapter"
-                        )
+
+                        // Restore novel reader if applicable
+                        if (lastNovel != null) {
+                            navController.navigate(
+                                "details/$lastActiveNovelId"
+                            ) {
+                                launchSingleTop = true
+                            }
+                            navController.navigate(
+                                "reader/$lastActiveNovelId/${lastNovel.lastReadChapter}"
+                            ) {
+                                launchSingleTop = true
+                            }
+                        }
                     }
+
+                    novelDao.clearUnusedPreviews()
                 }
 
+                // Update last screen in prefs
                 LaunchedEffect(navController) {
                     navController.currentBackStackEntryFlow.collect { entry ->
                         val route = entry.destination.route
                         val args = entry.arguments
-
                         when (route) {
                             "home" -> {
-                                sharedPref.edit {
-                                    putString("last_screen_type", "home")
-                                }
+                                sharedPref.edit { putString("last_screen_type", "home") }
                             }
+
                             "reader/{novelId}/{chapterIndex}" -> {
                                 val currentId = args?.getString("novelId") ?: ""
                                 sharedPref.edit {
@@ -78,44 +103,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                fun refreshLibrary() {
-                    allNovels = loadNovelsFromStorage(this, sharedPref)
-                }
-
-                fun persistNovelIfNeeded(novel: Novel) {
-                    val novelDir = File(filesDir, "novels/${novel.id}")
-                    if (!novelDir.exists()) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            LibraryManager.saveNovelToDisk(this@MainActivity, novel)
-                            withContext(Dispatchers.Main) {
-                                refreshLibrary()
-                            }
-                        }
-                    }
-                }
-
-                fun saveReadProgress(
-                    novelId: String,
-                    chapterIndex: Int,
-                    scrollPos: Int
-                ) {
-                    val currentTime = System.currentTimeMillis()
-
-                    sharedPref.edit {
-                        putInt("last_chapter_$novelId", chapterIndex)
-                        putInt("last_pos_$novelId", scrollPos)
-                        putLong("last_time_$novelId", currentTime)
-                    }
-
-                    allNovels = allNovels.map { novel ->
-                        if (novel.id == novelId) {
-                            novel.copy(
+                // Helper to save reading progress in DB
+                fun saveReadProgress(novelId: String, chapterIndex: Int, scrollPos: Int) {
+                    scope.launch(Dispatchers.IO) {
+                        val novel = novelDao.getNovel(novelId)
+                        if (novel != null) {
+                            val updated = novel.copy(
                                 lastReadChapter = chapterIndex,
                                 lastReadPosition = scrollPos,
-                                lastReadTime = currentTime
+                                lastReadTime = System.currentTimeMillis()
                             )
-                        } else {
-                            novel
+                            novelDao.updateNovel(updated)
                         }
                     }
                 }
@@ -128,98 +126,97 @@ class MainActivity : ComponentActivity() {
                     popEnterTransition = { EnterTransition.None },
                     popExitTransition = { ExitTransition.None }
                 ) {
-
+                    // --- HOME SCREEN ---
                     composable("home") {
                         HomeScreen(
-                            novels = allNovels,
+                            novels = libraryNovels,
                             selectedTab = currentHomeTab,
                             onTabChange = { currentHomeTab = it },
                             onNovelSelect = { novelId ->
                                 navController.navigate("details/$novelId")
                             },
                             onRemoveFromHistory = { novelId ->
-                                saveReadProgress(novelId, 0, 0)
+                                scope.launch(Dispatchers.IO) {
+                                    val novel = novelDao.getNovel(novelId) ?: return@launch
+
+                                    // Delete novels from db entirely if not in library
+                                    if (novel.category == "None") {
+                                        novelDao.deleteNovel(novelId)
+                                    } else { // Delete novel progress and chapters if in library
+                                        val resetNovel = novel.copy(
+                                            lastReadChapter = 1,
+                                            lastReadPosition = 0,
+                                            lastReadTime = 0L
+                                        )
+                                        novelDao.updateNovel(resetNovel)
+                                        chapterDao.deleteChaptersForNovel(novelId)
+                                    }
+                                }
                             },
-                            onRefreshLibrary = { refreshLibrary() },
+                            onRefreshLibrary = {},
                             onBrowseNovelSelect = { novelFromSearch ->
-                                val generatedId = (novelFromSearch.title + novelFromSearch.source).hashCode().toString()
-                                val existing = allNovels.find { it.id == generatedId }
+                                val generatedId =
+                                    (novelFromSearch.title + novelFromSearch.source).hashCode()
+                                        .toString()
 
-                                if (existing != null) {
-                                    navController.navigate("details/$generatedId")
-                                } else {
-                                    val previewNovel = novelFromSearch.copy(
-                                        id = generatedId,
-                                        category = "None",
-                                        source = novelFromSearch.source
-                                    )
-                                    allNovels = allNovels + previewNovel
-                                    navController.navigate("details/$generatedId")
+                                scope.launch {
+                                    val existing =
+                                        withContext(Dispatchers.IO) { novelDao.getNovel(generatedId) }
 
-                                    lifecycleScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val detailed = LibraryManager.getNovelDetails(previewNovel)
-                                            withContext(Dispatchers.Main) {
-                                                allNovels = allNovels.map { existingItem ->
-                                                    if (existingItem.id == generatedId) {
-                                                        detailed.copy(category = existingItem.category)
-                                                    } else {
-                                                        existingItem
-                                                    }
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
+                                    // Load novel from DB if exists
+                                    if (existing != null) {
+                                        navController.navigate("details/$generatedId")
+                                    } else { // Create novel if not in DB
+                                        val previewNovel = novelFromSearch.copy(
+                                            id = generatedId,
+                                            category = "None"
+                                        )
+                                        withContext(Dispatchers.IO) {
+                                            novelDao.insertNovel(previewNovel)
                                         }
+                                        // Fetch details novel details and update DB
+                                        launch(Dispatchers.IO) {
+                                            try {
+                                                val detailed =
+                                                    LibraryManager.getNovelDetails(previewNovel)
+                                                val toUpdate = detailed.copy(
+                                                    id = generatedId,
+                                                    category = "None"
+                                                )
+                                                novelDao.updateNovel(toUpdate)
+                                            } catch (_: Exception) {}                                           }
+                                        navController.navigate("details/$generatedId")
                                     }
                                 }
                             }
                         )
                     }
 
+                    // --- DETAILS SCREEN ---
                     composable("details/{novelId}") { backStackEntry ->
-                        val novelId =
-                            backStackEntry.arguments?.getString("novelId") ?: ""
-                        val novel =
-                            allNovels.find { it.id == novelId }
+                        // Fetch novelId
+                        val novelId = backStackEntry.arguments?.getString("novelId") ?: ""
 
-                        if (novel != null) {
+                        // Fetch novel details
+                        val novelState = produceState<Novel?>(initialValue = null, key1 = novelId) {
+                            value = withContext(Dispatchers.IO) { novelDao.getNovel(novelId) }
+                        }
+
+                        if (novelId.isNotEmpty()) {
                             ChaptersScreen(
-                                novel = novel,
-                                onBack = {
-                                    navController.popBackStack()
-                                },
+                                novelId = novelId,
+                                initialNovel = novelState.value, // Can be null initially
+                                onBack = { navController.popBackStack() },
                                 onChapterClick = { chapterId ->
-                                    persistNovelIfNeeded(novel)
-                                    navController.navigate(
-                                        "reader/$novelId/$chapterId"
-                                    )
+                                    navController.navigate("reader/$novelId/$chapterId")
                                 },
                                 onCategoryChange = { newCategory ->
-                                    allNovels = allNovels.map { item ->
-                                        if (item.id == novelId) {
-                                            item.copy(category = newCategory)
-                                        } else {
-                                            item
-                                        }
-                                    }
-                                    sharedPref.edit {
-                                        putString(
-                                            "category_$novelId",
-                                            newCategory
-                                        )
-                                    }
-
-                                    if (newCategory != "None") {
-                                        lifecycleScope.launch(Dispatchers.IO) {
-                                            LibraryManager.addNovelToLibrary(
-                                                this@MainActivity,
-                                                novel.copy(category = newCategory),
-                                                sharedPref
-                                            )
-                                            withContext(Dispatchers.Main) {
-                                                refreshLibrary()
-                                            }
+                                    scope.launch(Dispatchers.IO + NonCancellable) {
+                                        val current = novelDao.getNovel(novelId) ?: return@launch
+                                        val updated = current.copy(category = newCategory)
+                                        novelDao.updateNovel(updated)
+                                        if (newCategory != "None") {
+                                            LibraryManager.addToLibrary(applicationContext, updated)
                                         }
                                     }
                                 }
@@ -227,6 +224,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // --- READER SCREEN ---
                     composable(
                         route = "reader/{novelId}/{chapterIndex}",
                         arguments = listOf(
@@ -234,121 +232,141 @@ class MainActivity : ComponentActivity() {
                             navArgument("chapterIndex") { type = NavType.IntType }
                         )
                     ) { backStackEntry ->
+                        // Fetch novelId and chapter to show
                         val novelId = backStackEntry.arguments?.getString("novelId") ?: ""
-                        val startChapterIndex = backStackEntry.arguments?.getInt("chapterIndex") ?: 1
-                        val novel = allNovels.find { it.id == novelId }
-                        val totalChapters = novel?.chapterCount ?: 0
+                        val startChapterIndex =
+                            backStackEntry.arguments?.getInt("chapterIndex") ?: 1
 
-                        val scope = rememberCoroutineScope()
-
-                        val chapterInfoCache = remember { mutableMapOf<Int, Pair<String, String>>() }
-
-                        val loadedChapters = remember(startChapterIndex) { mutableStateListOf<ChapterData>() }
+                        var currentNovel by remember { mutableStateOf<Novel?>(null) }
+                        val loadedChapters =
+                            remember(startChapterIndex) { mutableStateListOf<ChapterData>() }
                         val fetchingIds = remember { mutableStateListOf<Int>() }
 
-                        suspend fun fetchChapterData(index: Int): ChapterData = withContext(Dispatchers.IO) {
-                            val novelDir = File(filesDir, "novels/$novelId")
-                            val contentFile = File(novelDir, "$index.txt")
-                            val chaptersFile = File(novelDir, "chapters.json")
+                        LaunchedEffect(novelId) {
+                            currentNovel =
+                                withContext(Dispatchers.IO) { novelDao.getNovel(novelId) }
+                        }
 
-                            fun ensureCacheLoaded() {
-                                if (chapterInfoCache.isEmpty() && chaptersFile.exists()) {
+                        // TODO: rewrite this function
+                        suspend fun fetchChapterData(index: Int): ChapterData =
+                            withContext(Dispatchers.IO + NonCancellable) { // TODO: find a way to not use NonCancellable
+                                var chapter = chapterDao.getChapter(novelId, index)
+
+                                // Fetch chapter from DB if already downloaded
+                                if (chapter != null && !chapter.body.isNullOrEmpty()) {
+                                    return@withContext ChapterData(
+                                        chapter.index,
+                                        chapter.name,
+                                        chapter.body
+                                    )
+                                }
+
+                                var retries = 0
+                                while (currentNovel == null && retries < 10) {
+                                    kotlinx.coroutines.delay(100)
+                                    retries++
+                                }
+
+                                val novel = currentNovel ?: return@withContext ChapterData(
+                                    index,
+                                    "Loading...",
+                                    ""
+                                )
+
+                                // If the chapter entry doesn't exist at all, sync the list from the web.
+                                if (chapter == null) {
                                     try {
-                                        val json = org.json.JSONArray(chaptersFile.readText())
-                                        for (i in 0 until json.length()) {
-                                            val obj = json.getJSONObject(i)
-                                            val idx = obj.getInt("index")
-                                            val url = obj.getString("url")
-                                            val name = obj.getString("name")
-                                            chapterInfoCache[idx] = url to name
+                                        LibraryManager.syncChapters(applicationContext, novel)
+                                        chapter = chapterDao.getChapter(novelId, index)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+
+                                // If we have the entry but no body, download the content.
+                                if (chapter != null) {
+                                    try {
+                                        val updatedChapter = LibraryManager.getChapterContent(
+                                            applicationContext,
+                                            chapter
+                                        )
+                                        return@withContext ChapterData(
+                                            updatedChapter.index,
+                                            updatedChapter.name,
+                                            updatedChapter.body ?: ""
+                                        )
+                                    } catch (_: Exception) {
+                                        return@withContext ChapterData(
+                                            index,
+                                            "Error",
+                                            "Failed to download."
+                                        )
+                                    }
+                                }
+
+                                return@withContext ChapterData(index, "Error", "Chapter not found.")
+                            }
+
+                        LaunchedEffect(startChapterIndex) {
+                            if (loadedChapters.none { it.id == startChapterIndex }) {
+                                if (!fetchingIds.contains(startChapterIndex)) {
+                                    fetchingIds.add(startChapterIndex)
+
+                                    val data = fetchChapterData(startChapterIndex)
+
+                                    loadedChapters.clear()
+                                    loadedChapters.add(data)
+                                    fetchingIds.remove(startChapterIndex)
+
+                                    // Prefetch next chapter
+                                    val total = currentNovel?.chapterCount ?: Int.MAX_VALUE
+                                    if (startChapterIndex < total) {
+                                        scope.launch(Dispatchers.IO) {
+                                            fetchChapterData(
+                                                startChapterIndex + 1
+                                            )
                                         }
-                                    } catch (e: Exception) { e.printStackTrace() }
-                                }
-                            }
-
-                            if (contentFile.exists()) {
-                                val body = contentFile.readText().replace(Regex("(?<!\n)\n(?!\n)"), "\n\n")
-
-                                var title = "Chapter $index"
-                                ensureCacheLoaded()
-                                title = chapterInfoCache[index]?.second ?: title
-
-                                return@withContext ChapterData(index, title, body)
-                            }
-
-                            if (novel != null) {
-                                if (!chaptersFile.exists()) {
-                                    LibraryManager.saveNovelToDisk(this@MainActivity, novel)
-                                }
-
-                                ensureCacheLoaded()
-
-                                val (targetUrl, targetName) = chapterInfoCache[index] ?: ("" to "Chapter $index")
-
-                                if (targetUrl.isNotEmpty()) {
-                                    val content = LibraryManager.downloadChapterContent(novel, targetUrl)
-                                    contentFile.writeText(content)
-                                    return@withContext ChapterData(index, targetName, content)
-                                }
-                            }
-                            return@withContext ChapterData(index, "Error", "Could not download chapter. Check connection.")
-                        }
-                        fun prefetchChapter(index: Int) {
-                            if (index <= totalChapters) {
-                                scope.launch(Dispatchers.IO) {
-                                    fetchChapterData(index)
+                                    }
                                 }
                             }
                         }
 
-                        LaunchedEffect(startChapterIndex, novelId) {
-                            if (loadedChapters.none { it.id == startChapterIndex } && !fetchingIds.contains(startChapterIndex)) {
-                                fetchingIds.add(startChapterIndex)
-                                val data = fetchChapterData(startChapterIndex)
-
-                                loadedChapters.clear()
-                                loadedChapters.add(data)
-                                fetchingIds.remove(startChapterIndex)
-
-                                prefetchChapter(startChapterIndex + 1)
+                        val initialScroll =
+                            if (currentNovel?.lastReadChapter == startChapterIndex) {
+                                currentNovel?.lastReadPosition ?: 0
+                            } else {
+                                0
                             }
-                        }
-
-                        val initialScroll = if (novel != null && novel.lastReadChapter == startChapterIndex) {
-                            novel.lastReadPosition
-                        } else {
-                            0
-                        }
 
                         ReaderScreen(
-                            novelTitle = novel?.title ?: "Unknown",
+                            novelTitle = currentNovel?.title ?: "",
                             chapters = loadedChapters,
-                            totalChapters = totalChapters,
+                            totalChapters = currentNovel?.chapterCount ?: 0,
                             initialChapterId = startChapterIndex,
                             initialScroll = initialScroll,
                             onBack = { navController.popBackStack() },
                             onLoadNextChapter = {
                                 val lastLoaded = loadedChapters.lastOrNull()?.id ?: 0
                                 val nextId = lastLoaded + 1
+                                val total = currentNovel?.chapterCount ?: Int.MAX_VALUE
 
-                                if (nextId <= totalChapters && !fetchingIds.contains(nextId)) {
+                                if (nextId <= total && !fetchingIds.contains(nextId)) {
                                     scope.launch {
                                         fetchingIds.add(nextId)
                                         val data = fetchChapterData(nextId)
-
                                         if (loadedChapters.none { it.id == data.id }) {
                                             loadedChapters.add(data)
                                         }
                                         fetchingIds.remove(nextId)
-
-                                        prefetchChapter(nextId + 1)
+                                        if (nextId < total) {
+                                            launch(Dispatchers.IO) { fetchChapterData(nextId + 1) }
+                                        }
                                     }
                                 }
                             },
                             onLoadPreviousChapter = {
                                 val firstLoaded = loadedChapters.firstOrNull()?.id ?: 0
                                 val prevId = firstLoaded - 1
-
                                 if (prevId >= 1 && !fetchingIds.contains(prevId)) {
                                     scope.launch {
                                         fetchingIds.add(prevId)
@@ -357,8 +375,9 @@ class MainActivity : ComponentActivity() {
                                             loadedChapters.add(0, data)
                                         }
                                         fetchingIds.remove(prevId)
-
-                                        prefetchChapter(prevId - 1)
+                                        if (prevId > 1) {
+                                            launch(Dispatchers.IO) { fetchChapterData(prevId - 1) }
+                                        }
                                     }
                                 }
                             },

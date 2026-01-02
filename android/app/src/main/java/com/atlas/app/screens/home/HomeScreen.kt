@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.atlas.app.Novel
+import com.atlas.app.data.Novel
 
 @Composable
 fun HomeScreen(
@@ -195,7 +195,6 @@ fun LibraryItem(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Remove",
-                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }

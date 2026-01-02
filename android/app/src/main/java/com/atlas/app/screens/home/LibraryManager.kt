@@ -1,28 +1,32 @@
 package com.atlas.app.screens.home
 
 import android.content.Context
-import android.content.SharedPreferences
-import com.atlas.app.Novel
+import com.atlas.app.data.Chapter
+import com.atlas.app.data.Novel
+import com.atlas.app.data.AppDatabase
 import com.atlas.app.sources.NovelFire
 import com.atlas.app.sources.NovelSource
 import com.atlas.app.sources.RoyalRoad
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.File
-import androidx.core.content.edit
 
 object LibraryManager {
-    // Sources
+    // --- Sources Configuration ---
     private val allSources: List<NovelSource> = listOf(
         NovelFire(),
         RoyalRoad(),
     )
     private var activeSources: List<NovelSource> = emptyList()
+
     fun getSourceNames(): List<String> = listOf("All") + allSources.map { it.name }
 
-    // Search functionality
+    private fun findSource(sourceName: String?): NovelSource? {
+        return allSources.find { it.name == sourceName }
+    }
+
+    // --- Search & Discovery (Web Only) ---
+    // These methods strictly query the web for the "Browse" screen.
+    // They do not save to the database automatically.
     suspend fun search(query: String, sourceIndex: Int): List<Novel> =
         withContext(Dispatchers.IO) {
             activeSources = if (sourceIndex == 0) {
@@ -33,6 +37,7 @@ object LibraryManager {
 
             activeSources.flatMap { source ->
                 try {
+                    // Note: returned novels are not yet in the DB
                     source.search(query).novels.map { it.copy(source = source.name) }
                 } catch (_: Exception) {
                     emptyList()
@@ -40,12 +45,10 @@ object LibraryManager {
             }
         }
 
-    // Load next page
     suspend fun loadNextPage(): List<Novel> = withContext(Dispatchers.IO) {
-        // Only ask sources that actually reported having a next page
         activeSources.filter { it.hasNextPage }.flatMap { source ->
             try {
-                source.loadNextPage().novels
+                source.loadNextPage().novels.map { it.copy(source = source.name) }
             } catch (e: Exception) {
                 e.printStackTrace()
                 emptyList()
@@ -53,89 +56,151 @@ object LibraryManager {
         }
     }
 
+    // --- Database / Library Operations ---
+
+    /**
+     * Gets novel details (chapter count) for the preview screen.
+     * Does NOT save to DB yet, just fetches metadata from the web.
+     */
     suspend fun getNovelDetails(novel: Novel): Novel = withContext(Dispatchers.IO) {
-        val source = findSource(novel.source)
+        val source = findSource(novel.source) ?: return@withContext novel
 
         val chapters = try {
-            source?.getChapters(novel) ?: emptyList()
+            source.getChapters(novel)
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
         }
 
-        return@withContext novel.copy(
-            chapterCount = chapters.size,
-            chapterTitles = chapters.map { it.name }
-        )
+        return@withContext novel.copy(chapterCount = chapters.size)
     }
 
-    suspend fun saveNovelToDisk(
-        context: Context,
-        novel: Novel,
-        chapters: List<com.atlas.app.Chapter>? = null,
-        category: String? = null,
-    ): String = withContext(Dispatchers.IO) {
-        val novelId = (novel.title + novel.source).hashCode().toString()
-        val finalChapters = chapters ?: fetchChapters(novel)
+    /**
+     * Adds a novel to the library (or updates it), then fetches and saves its chapter list.
+     */
+    suspend fun addToLibrary(context: Context, novel: Novel) = withContext(Dispatchers.IO) {
+        val db = AppDatabase.getDatabase(context)
 
-        val novelFolder = File(context.filesDir, "novels/$novelId").apply { if (!exists()) mkdirs() }
+        // 1. Save Novel with "Reading" status
+        val novelToSave = novel.copy(category = if (novel.category == "None") "Reading" else novel.category)
+        db.novelDao().insertNovel(novelToSave)
 
-        // Save novel info
-        val infoJson = JSONObject().apply {
-            put("id", novelId)
-            put("title", novel.title)
-            put("author", novel.author ?: "Unknown Author")
-            put("source", novel.source)
-            put("description", novel.description ?: "No description available.")
-            if (category != null) put("category", category)
-            put("coverAsset", novel.coverAsset)
-            put("totalChapters", finalChapters.size)
-            put("sourceUrl", novel.url)
+        // 2. Sync Chapters
+        syncChapters(context, novelToSave)
+    }
+
+    /**
+     * Fetches the latest chapters from the web and updates the database.
+     */
+    suspend fun syncChapters(context: Context, novel: Novel) = withContext(Dispatchers.IO) {
+        val db = AppDatabase.getDatabase(context)
+        val source = findSource(novel.source) ?: return@withContext
+
+        try {
+            // Fetch raw list from source
+            // Note: Source returns basic Chapter objects. We must map them to Entities.
+            val webChapters = source.getChapters(novel)
+
+            if (webChapters.isNotEmpty()) {
+                val entities = webChapters.mapIndexed { index, rawChapter ->
+                    Chapter(
+                        novelId = novel.id,
+                        index = index + 1, // 1-based index
+                        name = rawChapter.name,
+                        url = rawChapter.url,
+                        body = null // Body is fetched only when reading
+                    )
+                }
+
+                // Transaction: Update novel count and insert all chapters
+                db.novelDao().insertNovelWithChapters(
+                    novel.copy(chapterCount = entities.size),
+                    entities
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        File(novelFolder, "info.json").writeText(infoJson.toString())
+    }
 
-        // Save chapters
-        val chaptersArray = JSONArray()
-        finalChapters.forEachIndexed { index, chapter ->
-            chaptersArray.put(JSONObject().apply {
-                put("index", index + 1)
-                put("name", chapter.name)
-                put("url", chapter.url)
-            })
+    /**
+     * Returns the list of chapters.
+     * Logic: Checks DB first. If empty, syncs from Web, saves to DB, then returns.
+     */
+    suspend fun getChapters(context: Context, novel: Novel): List<Chapter> = withContext(Dispatchers.IO) {
+        val db = AppDatabase.getDatabase(context)
+
+        // 1. Try Local Cache
+        val cached = db.chapterDao().getChaptersForNovel(novel.id)
+        if (cached.isNotEmpty()) {
+            return@withContext cached
         }
-        File(novelFolder, "chapters.json").writeText(chaptersArray.toString())
 
-        return@withContext novelId
+        // 2. If missing, Sync from Web
+        syncChapters(context, novel)
+
+        // 3. Return newly cached data
+        return@withContext db.chapterDao().getChaptersForNovel(novel.id)
     }
 
-    private fun findSource(sourceName: String?): NovelSource? {
-        return allSources.find { it.name == sourceName }
-    }
+    /**
+     * Returns the full content (body) of a specific chapter.
+     * Logic: Checks DB. If body is null, fetches from Web, updates DB, returns content.
+     */
+    suspend fun getChapterContent(context: Context, chapter: Chapter): Chapter = withContext(Dispatchers.IO) {
+        val db = AppDatabase.getDatabase(context)
 
-    suspend fun fetchChapters(novel: Novel): List<com.atlas.app.Chapter> {
-        return findSource(novel.source)?.getChapters(novel) ?: emptyList()
-    }
+        // 1. Check if we already have the body
+        if (!chapter.body.isNullOrBlank()) {
+            return@withContext chapter
+        }
 
-    // Save novel to library
-    suspend fun addNovelToLibrary(
-        context: Context,
-        novel: Novel,
-        sharedPref: SharedPreferences
-    ) = withContext(Dispatchers.IO) {
-        val novelId = saveNovelToDisk(context, novel, null, category = "Reading")
+        // 2. Fetch from Web
+        val source = findSource(findSourceForChapter(context, chapter.novelId))
+        if (source != null) {
+            try {
+                // Fetch body string
+                // Note: assuming source.getChapterContent returns a wrapper or string
+                // We'll assume the source returns a simple data object with 'body'
+                val bodyText = source.getChapterBody(chapter.url)
 
-        val savedIds = sharedPref.getStringSet("library_ids", mutableSetOf()) ?: mutableSetOf()
-        val newIds = savedIds.toMutableSet().apply { add(novelId) }
+                // 3. Update Database
+                db.chapterDao().updateChapterBody(chapter.id, bodyText)
 
-        sharedPref.edit {
-            putStringSet("library_ids", newIds)
-            if (!sharedPref.contains("category_$novelId")) {
-                putString("category_$novelId", "Reading")
+                // 4. Return updated object
+                return@withContext chapter.copy(body = bodyText)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
+
+        // Return original if failure
+        return@withContext chapter.copy(body = "Error loading content.")
     }
-    suspend fun downloadChapterContent(novel: Novel, chapterUrl: String): String {
-        return findSource(novel.source)?.getChapterContent(chapterUrl)?.body ?: "Error"
+
+    suspend fun fetchChaptersForPreview(novel: Novel): List<Chapter> {
+        val source = findSource(novel.source) ?: return emptyList()
+        return try {
+            val webChapters = source.getChapters(novel)
+            // Map raw source chapters to Entity objects (but don't save them)
+            webChapters.mapIndexed { index, raw ->
+                Chapter(
+                    id = 0, // Not persisted
+                    novelId = novel.id,
+                    index = index + 1,
+                    name = raw.name,
+                    url = raw.url,
+                    body = null
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    // Helper to find source name for a chapter (by looking up its novel)
+    private suspend fun findSourceForChapter(context: Context, novelId: String): String? {
+        return AppDatabase.getDatabase(context).novelDao().getNovel(novelId)?.source
     }
 }
-

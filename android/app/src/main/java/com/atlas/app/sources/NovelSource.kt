@@ -1,9 +1,8 @@
 package com.atlas.app.sources
 
-import com.atlas.app.Chapter
-import com.atlas.app.ChapterData
-import com.atlas.app.Novel
-import com.atlas.app.SearchResult
+import com.atlas.app.data.Chapter
+import com.atlas.app.data.Novel
+import com.atlas.app.data.SearchResult
 
 sealed interface NovelSource {
     val name: String
@@ -18,8 +17,8 @@ sealed interface NovelSource {
 
     suspend fun search(query: String): SearchResult
     suspend fun loadNextPage(): SearchResult
+
     suspend fun getChapters(novel: Novel): List<Chapter>
-    suspend fun getChapterContent(chapterUrl: String): ChapterData
-    fun getNextChapter(chapters: List<Chapter>, currentChapter: Chapter): Chapter?
-    fun getPrevChapter(chapters: List<Chapter>, currentChapter: Chapter): Chapter?
+
+    suspend fun getChapterBody(chapterUrl: String): String
 }

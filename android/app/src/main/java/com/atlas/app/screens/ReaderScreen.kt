@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.atlas.app.ChapterData
+import com.atlas.app.data.ChapterData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -50,6 +50,12 @@ fun ReaderScreen(
 
     var isTopBarVisible by remember { mutableStateOf(false) }
     var isPillBarVisible by remember { mutableStateOf(true) }
+
+    var shouldShowSpinner by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(100)
+        shouldShowSpinner = true
+    }
 
     val listState = rememberLazyListState()
     var initialScrollDone by remember { mutableStateOf(false) }
@@ -180,8 +186,10 @@ fun ReaderScreen(
                 color = MaterialTheme.colorScheme.background
             ) {
                 if (uniqueChapters.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                    if (shouldShowSpinner) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
                 } else {
                     LazyColumn(
