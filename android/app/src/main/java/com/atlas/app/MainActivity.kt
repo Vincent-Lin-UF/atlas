@@ -1,6 +1,5 @@
 package com.atlas.app
 
-import android.annotation.SuppressLint
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,7 +27,6 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
-    @SuppressLint("SourceLockedOrientationActivity")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

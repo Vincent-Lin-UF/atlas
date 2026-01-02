@@ -59,8 +59,6 @@ fun ChaptersScreen(
     val collapsedGroups = remember { mutableStateMapOf<Int, Boolean>() }
 
     LaunchedEffect(currentNovel.id, currentNovel.category) {
-        isLoading = true
-
         withContext(Dispatchers.IO) {
             val dbChapters = db.chapterDao().getChaptersForNovel(currentNovel.id)
             if (dbChapters.isNotEmpty()) {
