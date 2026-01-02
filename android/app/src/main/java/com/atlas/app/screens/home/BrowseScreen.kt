@@ -1,13 +1,10 @@
 package com.atlas.app.screens.home
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -15,13 +12,11 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import com.atlas.app.components.LibraryItem
 import com.atlas.app.data.Novel
+import com.atlas.app.components.SearchAppBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -132,19 +127,14 @@ private fun BrowseContent(
         }
     }
 
-    // Pagination
+    // Pagination Logic
     LaunchedEffect(listState) {
         snapshotFlow {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
             lastVisible >= layout.totalItemsCount - 2
         }.collect { atBottom ->
-            if (
-                atBottom &&
-                !isLoadingMore &&
-                canLoadMore &&
-                results.isNotEmpty()
-            ) {
+            if (atBottom && !isLoadingMore && canLoadMore && results.isNotEmpty()) {
                 isLoadingMore = true
                 try {
                     val more = LibraryManager.loadNextPage()
@@ -176,45 +166,12 @@ private fun BrowseContent(
         contentPadding = PaddingValues(bottom = 80.dp, top = 12.dp)
     ) {
         items(results) { novel ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNovelSelect(novel) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .height(70.dp)
-                        .width(50.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    AsyncImage(
-                        model = novel.coverAsset,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = novel.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = novel.chapterCount.let { "$it Chapters" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-            }
+            LibraryItem(
+                novel = novel,
+                subtitle = "${novel.chapterCount} Chapters",
+                onDeleteClick = null,
+                onClick = { onNovelSelect(novel) }
+            )
         }
 
         if (isLoadingMore) {
