@@ -24,9 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.atlas.app.data.Novel
 
 @Composable
@@ -47,7 +50,10 @@ fun LibraryItem(
         ) {
             if (!novel.coverAsset.isNullOrEmpty()) {
                 AsyncImage(
-                    model = novel.coverAsset,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(novel.coverAsset)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .memoryCachePolicy(CachePolicy.ENABLED).build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,11 +24,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.atlas.app.data.AppDatabase
 import com.atlas.app.data.Chapter
 import com.atlas.app.data.Novel
 import com.atlas.app.screens.home.LibraryManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,38 +45,29 @@ fun ChaptersScreen(
 ) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
+    val scope = rememberCoroutineScope()
 
     val observedNovel by db.novelDao().getNovelFlow(novelId).collectAsState(initial = initialNovel)
     val currentNovel = observedNovel ?: initialNovel
 
     if (currentNovel == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
         return
     }
 
     val categories = listOf("Reading", "On Hold", "Finished", "None")
     var sortDescending by remember { mutableStateOf(false) }
     var showLibraryMenu by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(true) }
 
-    var displayedChapters by remember(currentNovel.id) { mutableStateOf<List<Chapter>>(emptyList()) }
     val collapsedGroups = remember { mutableStateMapOf<Int, Boolean>() }
 
-    LaunchedEffect(currentNovel.id, currentNovel.category) {
-        withContext(Dispatchers.IO) {
-            val dbChapters = db.chapterDao().getChaptersForNovel(currentNovel.id)
-            if (dbChapters.isNotEmpty()) {
-                displayedChapters = dbChapters
-            } else if (currentNovel.category == "None") {
-                val webChapters = LibraryManager.fetchChaptersForPreview(currentNovel)
-                displayedChapters = webChapters
-            } else {
-                LibraryManager.syncChapters(context, currentNovel)
-                displayedChapters = db.chapterDao().getChaptersForNovel(currentNovel.id)
-            }
-        }
-        isLoading = false
-    }
+    val displayedChapters = rememberChapterList(novel = currentNovel, db = db)
+    val isLoading = displayedChapters.isEmpty()
+
+    var isRefreshing by remember { mutableStateOf(false) }
 
     val primaryContainerColor = MaterialTheme.colorScheme.surface
     val primaryContentColor = MaterialTheme.colorScheme.onSurface
@@ -96,10 +91,18 @@ fun ChaptersScreen(
                 ),
                 actions = {
                     IconButton(onClick = { /* Delete Action */ }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = primaryContentColor)
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = primaryContentColor
+                        )
                     }
                     IconButton(onClick = { /* Download action */ }) {
-                        Icon(Icons.Default.Download, contentDescription = "Download", tint = primaryContentColor)
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "Download",
+                            tint = primaryContentColor
+                        )
                     }
                     Box {
                         IconButton(onClick = {
@@ -126,7 +129,12 @@ fun ChaptersScreen(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (isSelected) {
-                                                Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    null,
+                                                    Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
                                                 Spacer(Modifier.width(8.dp))
                                             } else {
                                                 Spacer(Modifier.width(24.dp))
@@ -149,7 +157,8 @@ fun ChaptersScreen(
             if (displayedChapters.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = {
-                        val target = if (currentNovel.lastReadChapter > 0) currentNovel.lastReadChapter else 1
+                        val target =
+                            if (currentNovel.lastReadChapter > 0) currentNovel.lastReadChapter else 1
                         onChapterClick(target)
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -166,97 +175,125 @@ fun ChaptersScreen(
 
         val sortedChapters = if (sortDescending) displayedChapters.reversed() else displayedChapters
         val chunks = remember(sortedChapters) { sortedChapters.chunked(100) }
-
-        LazyColumn(
-            contentPadding = innerPadding,
-            modifier = Modifier.fillMaxSize()
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    LibraryManager.syncChapters(context, currentNovel)
+                    isRefreshing = false
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding) // Apply Scaffold padding here
         ) {
-            item(key = "header") {
-                NovelHeaderSection(
-                    title = currentNovel.title,
-                    author = currentNovel.author,
-                    source = currentNovel.source,
-                    coverAsset = currentNovel.coverAsset
-                )
-            }
+            LazyColumn {
+                item(key = "header") {
+                    NovelHeaderSection(
+                        title = currentNovel.title,
+                        author = currentNovel.author,
+                        source = currentNovel.source,
+                        coverAsset = currentNovel.coverAsset
+                    )
+                }
 
-            item(key = "desc") {
-                ExpandableDescription(text = currentNovel.description)
-            }
+                item(key = "desc") {
+                    ExpandableDescription(text = currentNovel.description)
+                }
 
-            item(key = "controls") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val countText = when {
-                        isLoading -> ""
-                        displayedChapters.isNotEmpty() -> "${displayedChapters.size} chapters"
-                        else -> "No chapters"
-                    }
-                    Text(text = countText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                item(key = "controls") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val countText = when {
+                            isLoading -> ""
+                            displayedChapters.isNotEmpty() -> "${displayedChapters.size} chapters"
+                            else -> "No chapters"
+                        }
+                        Text(
+                            text = countText,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
 
-                    Row {
-                        if (chunks.size > 1) {
-                            val allCollapsed = collapsedGroups.size == chunks.size
+                        Row {
+                            if (chunks.size > 1) {
+                                val allCollapsed = collapsedGroups.size == chunks.size
 
-                            IconButton(onClick = {
-                                if (allCollapsed) {
-                                    collapsedGroups.clear()
-                                } else {
-                                    chunks.indices.forEach { collapsedGroups[it] = true }
+                                IconButton(onClick = {
+                                    if (allCollapsed) {
+                                        collapsedGroups.clear()
+                                    } else {
+                                        chunks.indices.forEach { collapsedGroups[it] = true }
+                                    }
+                                }) {
+                                    Icon(
+                                        imageVector = if (allCollapsed) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
+                                        contentDescription = "Toggle All Groups",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
-                            }) {
+                            }
+
+                            IconButton(onClick = { sortDescending = !sortDescending }) {
                                 Icon(
-                                    imageVector = if (allCollapsed) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
-                                    contentDescription = "Toggle All Groups",
+                                    Icons.Default.SwapVert,
+                                    "Reverse Sort",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
+                    }
+                }
 
-                        IconButton(onClick = { sortDescending = !sortDescending }) {
-                            Icon(Icons.Default.SwapVert, "Reverse Sort", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (isLoading) {
+                    item {
+                        Box(
+                            Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator() }
+                    }
+                }
+
+                chunks.forEachIndexed { index, chunk ->
+                    val startChapter = chunk.first().index
+                    val endChapter = chunk.last().index
+                    val isCollapsed = collapsedGroups.containsKey(index)
+
+                    if (chunks.size > 1) {
+                        item(key = "group_header_$index") {
+                            ChapterGroupHeader(
+                                start = startChapter,
+                                end = endChapter,
+                                isExpanded = !isCollapsed,
+                                onToggle = {
+                                    if (isCollapsed) collapsedGroups.remove(index) else collapsedGroups[index] =
+                                        true
+                                }
+                            )
+                        }
+                    }
+
+                    if (!isCollapsed) {
+                        items(
+                            items = chunk,
+                            key = { ch -> "${currentNovel.id}_${ch.index}" }) { chapter ->
+                            ChapterListItem(
+                                name = chapter.name,
+                                chapterNum = chapter.index,
+                                onClick = { onChapterClick(chapter.index) }
+                            )
                         }
                     }
                 }
+
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
-
-            if (isLoading) {
-                item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-            }
-
-            chunks.forEachIndexed { index, chunk ->
-                val startChapter = chunk.first().index
-                val endChapter = chunk.last().index
-                val isCollapsed = collapsedGroups.containsKey(index)
-
-                if (chunks.size > 1) {
-                    item(key = "group_header_$index") {
-                        ChapterGroupHeader(
-                            start = startChapter,
-                            end = endChapter,
-                            isExpanded = !isCollapsed,
-                            onToggle = { if (isCollapsed) collapsedGroups.remove(index) else collapsedGroups[index] = true }
-                        )
-                    }
-                }
-
-                if (!isCollapsed) {
-                    items(items = chunk, key = { ch -> "${currentNovel.id}_${ch.index}" }) { chapter ->
-                        ChapterListItem(
-                            name = chapter.name,
-                            chapterNum = chapter.index,
-                            onClick = { onChapterClick(chapter.index) }
-                        )
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(80.dp)) }
         }
     }
 }
@@ -298,7 +335,11 @@ fun NovelHeaderSection(title: String, author: String?, source: String, coverAsse
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (!coverAsset.isNullOrEmpty()) {
-                AsyncImage(model = coverAsset, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                AsyncImage(model = ImageRequest.Builder(LocalContext.current)
+                    .data(coverAsset)
+                    .diskCachePolicy(CachePolicy.DISABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED).build(),
+                    contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
                 Icon(Icons.Default.Book, null, Modifier.align(Alignment.Center), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -395,4 +436,38 @@ fun ChapterListItem(name: String, chapterNum: Int, onClick: () -> Unit) {
         headlineContent = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium) },
         trailingContent = { Text(chapterNum.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)) }
     )
+}
+
+@Composable
+fun rememberChapterList(
+    novel: Novel,
+    db: AppDatabase
+): List<Chapter> {
+    val context = LocalContext.current
+    val dbChapters by db.chapterDao().getChaptersForNovelFlow(novel.id)
+        .collectAsState(initial = emptyList())
+
+    var visibleChapters by remember { mutableStateOf<List<Chapter>>(emptyList()) }
+
+    LaunchedEffect(dbChapters) {
+        if (dbChapters.isNotEmpty()) {
+            visibleChapters = dbChapters
+        }
+    }
+
+    LaunchedEffect(novel.id, novel.category) {
+        withContext(Dispatchers.IO) {
+            if (novel.category == "None") {
+                if (visibleChapters.isEmpty()) {
+                    val webChapters = LibraryManager.fetchChaptersForPreview(novel)
+                    if (webChapters.isNotEmpty()) visibleChapters = webChapters
+                }
+            } else {
+                if (dbChapters.isEmpty()) {
+                    LibraryManager.syncChapters(context, novel)
+                }
+            }
+        }
+    }
+    return visibleChapters
 }

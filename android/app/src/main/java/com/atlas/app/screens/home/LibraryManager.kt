@@ -61,8 +61,7 @@ object LibraryManager {
 
         val chapters = try {
             source.getChapters(novel)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
             emptyList()
         }
 
@@ -106,23 +105,10 @@ object LibraryManager {
         }
     }
 
-    suspend fun getChapters(context: Context, novel: Novel): List<Chapter> = withContext(Dispatchers.IO) {
+    suspend fun getChapterContent(context: Context, chapter: Chapter, forceRefresh: Boolean = false): Chapter = withContext(Dispatchers.IO) {
         val db = AppDatabase.getDatabase(context)
 
-        val cached = db.chapterDao().getChaptersForNovel(novel.id)
-        if (cached.isNotEmpty()) {
-            return@withContext cached
-        }
-
-        syncChapters(context, novel)
-
-        return@withContext db.chapterDao().getChaptersForNovel(novel.id)
-    }
-
-    suspend fun getChapterContent(context: Context, chapter: Chapter): Chapter = withContext(Dispatchers.IO) {
-        val db = AppDatabase.getDatabase(context)
-
-        if (!chapter.body.isNullOrBlank()) {
+        if (!chapter.body.isNullOrBlank() && !forceRefresh) {
             return@withContext chapter
         }
 

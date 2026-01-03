@@ -228,7 +228,7 @@ fun ReaderScreen(
                                 if (index < uniqueChapters.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier
-                                            .padding(top = 20.dp)
+                                            .padding(top = 20.dp, bottom = 4.dp)
                                             .fillMaxWidth(),
                                         thickness = 1.dp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
