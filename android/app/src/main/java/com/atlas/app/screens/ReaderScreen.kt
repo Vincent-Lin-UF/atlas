@@ -40,6 +40,7 @@ fun ReaderScreen(
     onBack: () -> Unit,
     onLoadNextChapter: () -> Unit,
     onLoadPreviousChapter: () -> Unit,
+    onRefresh: (Int) -> Unit,
     onSaveProgress: (Int, Int) -> Unit
 ) {
     // --- TEXT SETTINGS ---
@@ -268,7 +269,7 @@ fun ReaderScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { /* Menu Action */ }) {
+                        IconButton(onClick = { currentVisibleChapter?.let { onRefresh(it.id) } }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                         IconButton(onClick = { /* Menu Action */ }) {

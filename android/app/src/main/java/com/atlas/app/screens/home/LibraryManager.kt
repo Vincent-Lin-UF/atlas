@@ -125,7 +125,7 @@ object LibraryManager {
             }
         }
 
-        return@withContext chapter.copy(body = "Error loading content.")
+        return@withContext chapter.copy(body = "")
     }
 
     suspend fun fetchChaptersForPreview(novel: Novel): List<Chapter> {

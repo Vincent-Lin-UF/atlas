@@ -182,7 +182,9 @@ class MainActivity : ComponentActivity() {
                                                     category = "None"
                                                 )
                                                 novelDao.updateNovel(toUpdate)
-                                            } catch (_: Exception) {}                                           }
+                                            } catch (_: Exception) {
+                                            }
+                                        }
                                         navController.navigate("details/$generatedId")
                                     }
                                 }
@@ -246,12 +248,15 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // TODO: rewrite this function
-                        suspend fun fetchChapterData(index: Int): ChapterData =
+                        suspend fun fetchChapterData(
+                            index: Int,
+                            forceRefresh: Boolean = false
+                        ): ChapterData =
                             withContext(Dispatchers.IO + NonCancellable) { // TODO: find a way to not use NonCancellable
                                 var chapter = chapterDao.getChapter(novelId, index)
 
                                 // Fetch chapter from DB if already downloaded
-                                if (chapter != null && !chapter.body.isNullOrEmpty()) {
+                                if (chapter != null && !chapter.body.isNullOrEmpty() && !forceRefresh) {
                                     return@withContext ChapterData(
                                         chapter.index,
                                         chapter.name,
@@ -286,7 +291,8 @@ class MainActivity : ComponentActivity() {
                                     try {
                                         val updatedChapter = LibraryManager.getChapterContent(
                                             applicationContext,
-                                            chapter
+                                            chapter,
+                                            forceRefresh = forceRefresh
                                         )
                                         return@withContext ChapterData(
                                             updatedChapter.index,
@@ -296,13 +302,13 @@ class MainActivity : ComponentActivity() {
                                     } catch (_: Exception) {
                                         return@withContext ChapterData(
                                             index,
-                                            "Error",
-                                            "Failed to download."
+                                            "",
+                                            ""
                                         )
                                     }
                                 }
 
-                                return@withContext ChapterData(index, "Error", "Chapter not found.")
+                                return@withContext ChapterData(index, "", "")
                             }
 
                         LaunchedEffect(startChapterIndex) {
@@ -376,6 +382,21 @@ class MainActivity : ComponentActivity() {
                                         if (prevId > 1) {
                                             launch(Dispatchers.IO) { fetchChapterData(prevId - 1) }
                                         }
+                                    }
+                                }
+                            },
+                            onRefresh = { chapterIdToRefresh ->
+                                scope.launch {
+                                    val refreshedData =
+                                        fetchChapterData(chapterIdToRefresh, forceRefresh = true)
+                                    val index =
+                                        loadedChapters.indexOfFirst { it.id == chapterIdToRefresh }
+                                    if (index != -1) {
+                                        loadedChapters[index] = refreshedData
+                                    }
+
+                                    loadedChapters.removeAll { chapter ->
+                                        chapter.id != chapterIdToRefresh && (chapter.body == "")
                                     }
                                 }
                             },
