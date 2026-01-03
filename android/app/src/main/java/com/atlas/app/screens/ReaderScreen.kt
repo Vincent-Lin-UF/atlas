@@ -237,7 +237,7 @@ fun ReaderScreen(
                             }
                         }
                         item {
-                            Spacer(modifier = Modifier.fillParentMaxHeight(0.9f))
+                            Spacer(modifier = Modifier.fillParentMaxHeight(0.975f))
                         }
                     }
                 }

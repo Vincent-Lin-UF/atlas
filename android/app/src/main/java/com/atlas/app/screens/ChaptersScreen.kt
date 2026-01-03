@@ -444,7 +444,7 @@ fun rememberChapterList(
     db: AppDatabase
 ): List<Chapter> {
     val context = LocalContext.current
-    val dbChapters by db.chapterDao().getChaptersForNovelFlow(novel.id)
+    val dbChapters by db.chapterDao().getChaptersForNovel(novel.id)
         .collectAsState(initial = emptyList())
 
     var visibleChapters by remember { mutableStateOf<List<Chapter>>(emptyList()) }

@@ -204,7 +204,6 @@ private fun BrowseTabContent(
         return
     }
 
-    // Pagination Logic: Trigger onLoadMore when near bottom
     LaunchedEffect(listState, state.novels.size) {
         snapshotFlow {
             val layout = listState.layoutInfo

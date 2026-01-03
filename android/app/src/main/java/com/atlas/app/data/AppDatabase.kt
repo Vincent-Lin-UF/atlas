@@ -51,10 +51,7 @@ interface NovelDao {
 @Dao
 interface ChapterDao {
     @Query("SELECT * FROM chapters WHERE novelId = :novelId ORDER BY `index` ASC")
-    suspend fun getChaptersForNovel(novelId: String): List<Chapter>
-
-    @Query("SELECT * FROM chapters WHERE novelId = :novelId ORDER BY `index` ASC")
-    fun getChaptersForNovelFlow(novelId: String): Flow<List<Chapter>>
+    fun getChaptersForNovel(novelId: String): Flow<List<Chapter>>
 
     @Query("SELECT * FROM chapters WHERE novelId = :novelId AND `index` = :index LIMIT 1")
     suspend fun getChapter(novelId: String, index: Int): Chapter?
