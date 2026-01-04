@@ -1,9 +1,10 @@
 package com.atlas.app.sources
 
-import com.atlas.app.Chapter
-import com.atlas.app.ChapterData
-import com.atlas.app.Novel
-import com.atlas.app.SearchResult
+import com.atlas.app.data.Chapter
+import com.atlas.app.data.Novel
+import com.atlas.app.data.SearchResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 
 class RoyalRoad : NovelSource {
@@ -41,9 +42,15 @@ class RoyalRoad : NovelSource {
                 ?.filter { it.isDigit() }
                 ?.toIntOrNull()
 
+            val title = element.selectFirst("h2.fiction-title a")?.text() ?: "Unknown"
+            val sourceName = "Royal Road"
+
+            val id = (title + sourceName).hashCode().toString()
+
             Novel(
-                id = "",
-                title = element.selectFirst("h2.fiction-title a")?.text() ?: "Unknown",
+                id = id,
+                title = title,
+                source = sourceName,
                 url = element.selectFirst("h2.fiction-title a")?.attr("abs:href") ?: "",
                 coverAsset = element.selectFirst("img")?.attr("abs:src") ?: "",
                 chapterCount = chapterCount ?: 0
@@ -55,25 +62,26 @@ class RoyalRoad : NovelSource {
         return SearchResult(novels, if (hasNextPage) currentPage.toString() else null)
     }
 
-    override suspend fun getChapters(novel: Novel): List<Chapter> {
+    override suspend fun getChapters(novel: Novel): List<Chapter> = withContext(Dispatchers.IO) {
         val doc = Jsoup.connect(novel.url).userAgent(userAgent).get()
 
-        novel.author = doc.selectFirst("div.fic-title h4 span a")?.text()
-        novel.description = doc.selectFirst("div.description")?.text()
+         novel.author = doc.selectFirst("div.fic-title h4 span a")?.text()
+         novel.description = doc.selectFirst("div.description")?.text()
 
-        return doc.select("#chapters tbody tr").map { element ->
+        return@withContext doc.select("#chapters tbody tr").mapIndexed { index, element ->
             val link = element.selectFirst("td a")
             Chapter(
+                novelId = novel.id,
+                index = index + 1,
                 name = link?.text() ?: "Unknown Chapter",
-                url = link?.attr("abs:href") ?: ""
+                url = link?.attr("abs:href") ?: "",
+                body = null
             )
         }
     }
 
-    override suspend fun getChapterContent(chapterUrl: String): ChapterData {
+    override suspend fun getChapterBody(chapterUrl: String): String = withContext(Dispatchers.IO) {
         val doc = Jsoup.connect(chapterUrl).userAgent(userAgent).get()
-
-        val title = doc.selectFirst("h1.font-white")?.text() ?: ""
         val contentElement = doc.selectFirst(".chapter-inner")
 
         contentElement?.select("script, style")?.remove()
@@ -82,20 +90,6 @@ class RoyalRoad : NovelSource {
             ?: contentElement?.text()
             ?: "No content found"
 
-        return ChapterData(0, title, content)
-    }
-
-    override fun getNextChapter(chapters: List<Chapter>, currentChapter: Chapter): Chapter? {
-        val currentIndex = chapters.indexOfFirst { it.url == currentChapter.url }
-        return if (currentIndex != -1 && currentIndex < chapters.size - 1) {
-            chapters[currentIndex + 1]
-        } else null
-    }
-
-    override fun getPrevChapter(chapters: List<Chapter>, currentChapter: Chapter): Chapter? {
-        val currentIndex = chapters.indexOfFirst { it.url == currentChapter.url }
-        return if (currentIndex > 0) {
-            chapters[currentIndex - 1]
-        } else null
+        return@withContext content
     }
 }

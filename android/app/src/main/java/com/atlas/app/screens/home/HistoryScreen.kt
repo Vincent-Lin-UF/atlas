@@ -24,7 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.atlas.app.Novel
+import com.atlas.app.components.LibraryItem
+import com.atlas.app.components.SearchAppBar
+import com.atlas.app.data.Novel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,9 +38,10 @@ fun HistoryScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-
     val baseHistoryList = remember(allNovels) {
-        allNovels.filter { it.lastReadChapter > 0 }.sortedByDescending { it.lastReadTime }
+        allNovels
+            .filter { it.lastReadTime > 0L }
+            .sortedByDescending { it.lastReadTime }
     }
 
     // Search logic
@@ -80,7 +83,7 @@ fun HistoryScreen(
         }) { topPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(
-                top = topPadding.calculateTopPadding(),
+                top = topPadding.calculateTopPadding() + 12.dp,
                 bottom = bottomPadding.calculateBottomPadding()
             )
         ) {

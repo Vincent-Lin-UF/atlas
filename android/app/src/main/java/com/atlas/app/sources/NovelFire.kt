@@ -1,161 +1,154 @@
 package com.atlas.app.sources
 
-import com.atlas.app.Chapter
-import com.atlas.app.ChapterData
-import com.atlas.app.Novel
-import com.atlas.app.SearchResult
+import com.atlas.app.data.Chapter
+import com.atlas.app.data.Novel
+import com.atlas.app.data.SearchResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.jsoup.Connection
 import org.jsoup.Jsoup
 
 class NovelFire : NovelSource {
-        override val name = "NovelFire"
-        override val baseUrl = "https://novelfire.net"
-        override var currentPage = 1
-        override var currentQuery: String? = null
-        override var hasNextPage = false
+    override val name = "NovelFire"
+    override val baseUrl = "https://novelfire.net"
+    override var currentPage = 1
+    override var currentQuery: String? = null
+    override var hasNextPage = false
 
-        override suspend fun search(query: String): SearchResult {
-            currentPage = 1
-            currentQuery = query
-            return fetchResults()
+    override suspend fun search(query: String): SearchResult {
+        currentPage = 1
+        currentQuery = query
+        return fetchResults()
+    }
+
+    override suspend fun loadNextPage(): SearchResult {
+        currentPage++
+        return fetchResults()
+    }
+
+    private fun fetchResults(): SearchResult {
+        val query = currentQuery ?: return SearchResult(emptyList(), null)
+
+        val response = try {
+            Jsoup.connect("$baseUrl/search")
+                .userAgent(userAgent)
+                .header("Accept", "text/html,application/xhtml+xml,xml;q=0.9,image/webp,*/*;q=0.8")
+                .header("Accept-Language", "en-US,en;q=0.5")
+                .header("Referer", baseUrl)
+                .data("keyword", query)
+                .data("page", currentPage.toString())
+                .timeout(10000)
+                .execute()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return SearchResult(emptyList(), null)
         }
 
-        override suspend fun loadNextPage(): SearchResult {
-            currentPage++
-            return fetchResults()
-        }
+        val doc = response.parse()
 
-        private fun fetchResults(): SearchResult {
-            val query = currentQuery ?: return SearchResult(emptyList(), null)
+        val novelElements = doc.select(".chapters .novel-item")
 
-            val response = try {
-                Jsoup.connect("$baseUrl/search")
-                    .userAgent(userAgent)
-                    .header("Accept", "text/html,application/xhtml+xml,xml;q=0.9,image/webp,*/*;q=0.8")
-                    .header("Accept-Language", "en-US,en;q=0.5")
-                    .header("Referer", baseUrl)
-                    .data("keyword", query)
-                    .data("page", currentPage.toString())
-                    .timeout(10000)
-                    .execute()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                return SearchResult(emptyList(), null)
+        val novels = novelElements.map { element ->
+            val linkElement = element.selectFirst("a")
+            val titleElement = element.selectFirst(".novel-title") ?: element.selectFirst("h4")
+            val imgElement = element.selectFirst("img")
+
+            val actualImageUrl = when {
+                imgElement?.hasAttr("data-src") == true -> imgElement.attr("abs:data-src")
+                imgElement?.hasAttr("data-lazy-src") == true -> imgElement.attr("abs:data-lazy-src")
+                else -> imgElement?.attr("abs:src") ?: ""
             }
 
-            val doc = response.parse()
+            val chaptersText = element.selectFirst(".novel-stats span")?.text()
+            val title = titleElement?.text()?.trim() ?: "Unknown"
+            val sourceName = "NovelFire"
+            val id = (title + sourceName).hashCode().toString()
 
-            val novelElements = doc.select(".chapters .novel-item")
+            Novel(
+                id = id,
+                title = title,
+                source = sourceName,
+                url = linkElement?.attr("abs:href") ?: "",
+                coverAsset = actualImageUrl,
+                chapterCount = chaptersText?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+            )
+        }
 
-            val novels = novelElements.map { element ->
-                val linkElement = element.selectFirst("a")
-                val titleElement = element.selectFirst(".novel-title") ?: element.selectFirst("h4")
-                val imgElement = element.selectFirst("img")
+        hasNextPage = novels.isNotEmpty()
+        return SearchResult(novels, if (hasNextPage) currentPage.toString() else null)
+    }
 
-                val actualImageUrl = when {
-                    imgElement?.hasAttr("data-src") == true -> imgElement.attr("abs:data-src")
-                    imgElement?.hasAttr("data-lazy-src") == true -> imgElement.attr("abs:data-lazy-src")
-                    else -> imgElement?.attr("abs:src") ?: ""
-                }
+    override suspend fun getChapters(novel: Novel): List<Chapter> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val initialResponse = Jsoup.connect(novel.url)
+                .userAgent(userAgent)
+                .header("Referer", baseUrl)
+                .timeout(10000)
+                .execute()
 
-                val chaptersText = element.selectFirst(".novel-stats span")?.text()
+            val doc = initialResponse.parse()
 
-                Novel(
-                    id = "",
-                    title = titleElement?.text()?.trim() ?: "Unknown",
-                    url = linkElement?.attr("abs:href") ?: "",
-                    coverAsset = actualImageUrl,
-                    chapterCount = chaptersText?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+            novel.author = doc.selectFirst("div.author a span")?.text()
+            novel.description = doc.selectFirst("div.summary div.content")?.text()
+
+            val csrfToken = doc.select("meta[name=csrf-token]").attr("content")
+            val novelId = doc.select("#novel-report").attr("report-post_id")
+
+            if (csrfToken.isEmpty() || novelId.isEmpty()) return@withContext emptyList()
+
+            val ajaxDomain = if (novel.url.contains("www.novelfire.net")) {
+                "https://www.novelfire.net"
+            } else {
+                "https://novelfire.net"
+            }
+            val ajaxUrl = "$ajaxDomain/ajax/getListChapterById"
+
+            val jsonResponse = Jsoup.connect(ajaxUrl)
+                .method(Connection.Method.POST)
+                .userAgent(userAgent)
+                .header("Referer", novel.url)
+                .header("X-CSRF-TOKEN", csrfToken)
+                .header("X-Requested-With", "XMLHttpRequest")
+                .cookies(initialResponse.cookies())
+                .data("post_id", novelId)
+                .data("_token", csrfToken)
+                .ignoreContentType(true)
+                .execute()
+                .body()
+
+            val jsonObject = JSONObject(jsonResponse)
+            val jsonArray = jsonObject.getJSONArray("data")
+            val chapters = mutableListOf<Chapter>()
+            val baseUrlStripped = novel.url.removeSuffix("/")
+
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val rawTitle = obj.optString("title", "Chapter ${i + 1}")
+                val nSort = obj.optString("n_sort", "$i")
+
+                val cleanName = Jsoup.parse(rawTitle).text().trim()
+
+                chapters.add(
+                    Chapter(
+                        novelId = novel.id,
+                        index = i + 1,
+                        name = cleanName,
+                        url = "$baseUrlStripped/chapter-$nSort",
+                        body = null
+                    )
                 )
             }
-
-            hasNextPage = novels.isNotEmpty()
-            return SearchResult(novels, if (hasNextPage) currentPage.toString() else null)
+            chapters
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
         }
+    }
 
-        private fun cleanTitle(raw: String): String {
-            val unicodeRegex = Regex("""\\u([0-9a-fA-F]{4})""")
-            var title = unicodeRegex.replace(raw) {
-                it.groupValues[1].toInt(16).toChar().toString()
-            }
-            title = title.replace("\\/", "/")
-                .replace("\\\"", "\"")
-                .replace(Regex("""[\u007F-\u009F\u00AD\u200B-\u200F\uFEFF]"""), "")
-                .replace("\u00c2", "")
-            return title.replace(Regex("""\s+"""), " ").trim()
-        }
-
-        override suspend fun getChapters(novel: Novel): List<Chapter> {
-            return try {
-                val initialResponse = Jsoup.connect(novel.url)
-                    .userAgent(userAgent)
-                    .header("Referer", baseUrl)
-                    .timeout(10000)
-                    .execute()
-
-                val doc = initialResponse.parse()
-
-                novel.author = doc.selectFirst("div.author a span")?.text()
-                novel.description = doc.selectFirst("div.summary div.content")?.text()
-
-                val csrfToken = doc.select("meta[name=csrf-token]").attr("content")
-                val novelId = doc.select("#novel-report").attr("report-post_id")
-
-                if (csrfToken.isEmpty() || novelId.isEmpty()) return emptyList()
-
-                val ajaxDomain = if (novel.url.contains("www.novelfire.net")) {
-                    "https://www.novelfire.net"
-                } else {
-                    "https://novelfire.net"
-                }
-                val ajaxUrl = "$ajaxDomain/ajax/getListChapterById"
-
-                val jsonResponse = Jsoup.connect(ajaxUrl)
-                    .method(Connection.Method.POST)
-                    .userAgent(userAgent)
-                    .header("Referer", novel.url)
-                    .header("X-CSRF-TOKEN", csrfToken)
-                    .header("X-Requested-With", "XMLHttpRequest")
-                    .cookies(initialResponse.cookies())
-                    .data("post_id", novelId)
-                    .data("_token", csrfToken)
-                    .ignoreContentType(true)
-                    .execute()
-                    .body()
-
-                val jsonObject = JSONObject(jsonResponse)
-                val jsonArray = jsonObject.getJSONArray("data")
-                val chapters = mutableListOf<Chapter>()
-                val baseUrlStripped = novel.url.removeSuffix("/")
-
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    val rawTitle = obj.optString("title", "Chapter ${i + 1}")
-                    val nSort = obj.optString("n_sort", "$i")
-
-                    val cleanName = Jsoup.parse(rawTitle).text().trim()
-
-                    println("Scraped Chapter: $cleanName")
-
-                    chapters.add(
-                        Chapter(
-                            name = cleanName,
-                            url = "$baseUrlStripped/chapter-$nSort"
-                        )
-                    )
-                }
-                chapters
-            } catch (e: Exception) {
-                e.printStackTrace()
-                emptyList()
-            }
-        }
-
-    override suspend fun getChapterContent(chapterUrl: String): ChapterData {
+    override suspend fun getChapterBody(chapterUrl: String): String = withContext(Dispatchers.IO) {
         val doc = Jsoup.connect(chapterUrl).userAgent(userAgent).get()
 
-        val title = doc.selectFirst(".chapter-title")?.text() ?: "Unknown Title"
         val contentElement = doc.selectFirst("#content")
         if (contentElement != null) {
             val badSelectors = mutableSetOf<String>()
@@ -171,7 +164,7 @@ class NovelFire : NovelSource {
             if (badSelectors.isNotEmpty()) {
                 try {
                     contentElement.select(badSelectors.joinToString(", ")).remove()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                 }
             }
             contentElement.select("[style~=display:\\s*none], [style~=(width|height):\\s*[01](px)?]").remove()
@@ -183,20 +176,6 @@ class NovelFire : NovelSource {
             ?: contentElement?.text()
             ?: "No content found"
 
-        return ChapterData(0, title, content.trim())
+        return@withContext content.trim()
     }
-
-        override fun getNextChapter(chapters: List<Chapter>, currentChapter: Chapter): Chapter? {
-            val currentIndex = chapters.indexOfFirst { it.url == currentChapter.url }
-            return if (currentIndex != -1 && currentIndex < chapters.size - 1) {
-                chapters[currentIndex + 1]
-            } else null
-        }
-
-        override fun getPrevChapter(chapters: List<Chapter>, currentChapter: Chapter): Chapter? {
-            val currentIndex = chapters.indexOfFirst { it.url == currentChapter.url }
-            return if (currentIndex > 0) {
-                chapters[currentIndex - 1]
-            } else null
-        }
-    }
+}

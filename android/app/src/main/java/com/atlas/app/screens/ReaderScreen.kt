@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.atlas.app.ChapterData
+import com.atlas.app.data.ChapterData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -40,16 +40,23 @@ fun ReaderScreen(
     onBack: () -> Unit,
     onLoadNextChapter: () -> Unit,
     onLoadPreviousChapter: () -> Unit,
+    onRefresh: (Int) -> Unit,
     onSaveProgress: (Int, Int) -> Unit
 ) {
     // --- TEXT SETTINGS ---
     val fontSize = 14.sp
-    val lineHeight = 24.sp
+    val lineHeight = 20.sp
     val paragraphPadding = 8.dp
     // ---------------------
 
     var isTopBarVisible by remember { mutableStateOf(false) }
     var isPillBarVisible by remember { mutableStateOf(true) }
+
+    var shouldShowSpinner by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(100)
+        shouldShowSpinner = true
+    }
 
     val listState = rememberLazyListState()
     var initialScrollDone by remember { mutableStateOf(false) }
@@ -154,7 +161,7 @@ fun ReaderScreen(
                         Spacer(modifier = Modifier.width(20.dp))
 
                         if (currentVisibleChapter != null) {
-                            Text(text = "${currentVisibleChapter!!.id} / $totalChapters", fontSize = 14.sp)
+                            Text(text = "${currentVisibleChapter!!.id}/$totalChapters", fontSize = 10.sp)
                         }
                     }
                 }
@@ -180,8 +187,10 @@ fun ReaderScreen(
                 color = MaterialTheme.colorScheme.background
             ) {
                 if (uniqueChapters.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                    if (shouldShowSpinner) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -220,7 +229,7 @@ fun ReaderScreen(
                                 if (index < uniqueChapters.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier
-                                            .padding(top = 20.dp)
+                                            .padding(top = 20.dp, bottom = 4.dp)
                                             .fillMaxWidth(),
                                         thickness = 1.dp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
@@ -229,7 +238,7 @@ fun ReaderScreen(
                             }
                         }
                         item {
-                            Spacer(modifier = Modifier.fillParentMaxHeight(0.9f))
+                            Spacer(modifier = Modifier.fillParentMaxHeight(0.975f))
                         }
                     }
                 }
@@ -260,7 +269,7 @@ fun ReaderScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { /* Menu Action */ }) {
+                        IconButton(onClick = { currentVisibleChapter?.let { onRefresh(it.id) } }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                         IconButton(onClick = { /* Menu Action */ }) {
@@ -305,20 +314,20 @@ fun ReaderScreen(
                         ) {
                             if (!showMenuTools) {
                                 // Audio Controls
-                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Last Chapter") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Last Paragraph") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Speak Last Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.SkipPrevious, contentDescription = "Speak Last Paragraph") }
                                 IconButton(onClick = { }) { Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause") }
                                 IconButton(onClick = { }) { Icon(Icons.Default.Stop, contentDescription = "Stop") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.SkipNext, contentDescription = "Next Paragraph") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Next Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.SkipNext, contentDescription = "Speak Next Paragraph") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Speak Next Chapter") }
                             } else {
                                 // Settings Controls
-                                IconButton(onClick = { }) { Icon(Icons.Default.FormatPaint, contentDescription = "Theme") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "Search") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.FindReplace, contentDescription = "Replacement") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastRewind, contentDescription = "Last Chapter") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FormatPaint, contentDescription = "Change Theme") }
                                 IconButton(onClick = { }) { Icon(Icons.Default.Timer, contentDescription = "Speech Timer") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.Translate, contentDescription = "Translate") }
-                                IconButton(onClick = { }) { Icon(Icons.Default.Audiotrack, contentDescription = "Speech Settings") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FindReplace, contentDescription = "Replacement") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "Search") }
+                                IconButton(onClick = { }) { Icon(Icons.Default.FastForward, contentDescription = "Next Chapter") }
                             }
                         }
                     }
